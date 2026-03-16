@@ -39,3 +39,40 @@ export async function executeSqliteQuery(conn: DBConnection, query: string, valu
     db.close()
   }
 }
+
+export async function fetchSqliteTableDetails(conn: DBConnection, tableName: string) {
+  const db = new Database(conn.host || ':memory:', { readonly: true })
+  try {
+    // 1. Get Primary Keys
+    const info = db.prepare(`PRAGMA table_info('${tableName}')`).all() as any[]
+    const primaryKeys = info.filter(c => c.pk > 0).map(c => c.name)
+
+    // 2. Get Foreign Keys
+    const fks = db.prepare(`PRAGMA foreign_key_list('${tableName}')`).all() as any[]
+    const foreignKeys = fks.map(f => ({
+      column: f.from,
+      referencedTable: f.table,
+      referencedColumn: f.to
+    }))
+
+    // 3. Dependent Tables (Scanning sqlite_master for other tables that reference this one)
+    const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[]
+    const dependentTables: string[] = []
+
+    for (const t of allTables) {
+      if (t.name === tableName) continue
+      const otherFks = db.prepare(`PRAGMA foreign_key_list('${t.name}')`).all() as any[]
+      if (otherFks.some(f => f.table === tableName)) {
+        dependentTables.push(t.name)
+      }
+    }
+
+    return {
+      primaryKeys,
+      foreignKeys,
+      dependentTables
+    }
+  } finally {
+    db.close()
+  }
+}

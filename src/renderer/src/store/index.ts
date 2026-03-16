@@ -29,42 +29,84 @@ export interface SortState {
   direction: 'asc' | 'desc'
 }
 
+export interface GridState {
+  id: string
+  tableName: string
+  filters: QueryFilter[]
+  sortState: SortState | null
+  page: number
+  pageSize: number
+  isCollapsed: boolean
+}
+
 interface AppState {
   activeConnectionId: string | null
   activeDatabaseName: string | null
-  activeTableName: string | null
+  grids: GridState[]
+  
   setActiveConnectionId: (id: string | null) => void
   setActiveDatabaseName: (name: string | null) => void
-  setActiveTableName: (name: string | null) => void
   
-  page: number
-  pageSize: number
-  setPage: (page: number) => void
-  setPageSize: (pageSize: number) => void
-  
-  filters: QueryFilter[]
-  setFilters: (filters: QueryFilter[]) => void
-  
-  sortState: SortState | null
-  setSortState: (sort: SortState | null) => void
+  // Grid actions
+  setPrimaryTable: (tableName: string) => void
+  pushGrid: (tableName: string, filter: QueryFilter) => void
+  removeGrid: (id: string) => void
+  toggleGridCollapse: (id: string) => void
+  updateGrid: (id: string, updates: Partial<GridState>) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   activeConnectionId: null,
   activeDatabaseName: null,
-  activeTableName: null,
-  page: 1,
-  pageSize: 50,
-  setActiveConnectionId: (id) => set({ activeConnectionId: id, activeDatabaseName: null, activeTableName: null, filters: [], sortState: null, page: 1 }),
-  setActiveDatabaseName: (name) => set({ activeDatabaseName: name, activeTableName: null, filters: [], sortState: null, page: 1 }),
-  setActiveTableName: (name) => set({ activeTableName: name, filters: [], sortState: null, page: 1 }),
-  
-  setPage: (page) => set({ page }),
-  setPageSize: (pageSize) => set({ pageSize, page: 1 }),
-  
-  filters: [],
-  setFilters: (filters) => set({ filters }),
-  
-  sortState: null,
-  setSortState: (sortState) => set({ sortState })
+  grids: [],
+
+  setActiveConnectionId: (id) => set({ 
+    activeConnectionId: id, 
+    activeDatabaseName: null, 
+    grids: [] 
+  }),
+
+  setActiveDatabaseName: (name) => set({ 
+    activeDatabaseName: name, 
+    grids: [] 
+  }),
+
+  setPrimaryTable: (tableName) => set({
+    grids: [{
+      id: 'primary',
+      tableName,
+      filters: [],
+      sortState: null,
+      page: 1,
+      pageSize: 50,
+      isCollapsed: false
+    }]
+  }),
+
+  pushGrid: (tableName, filter) => set((state) => ({
+    grids: [
+      ...state.grids,
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        tableName,
+        filters: [filter],
+        sortState: null,
+        page: 1,
+        pageSize: 25, // Navigated grids might be smaller/defaulted
+        isCollapsed: false
+      }
+    ]
+  })),
+
+  removeGrid: (id) => set((state) => ({
+    grids: state.grids.filter(g => g.id !== id)
+  })),
+
+  toggleGridCollapse: (id) => set((state) => ({
+    grids: state.grids.map(g => g.id === id ? { ...g, isCollapsed: !g.isCollapsed } : g)
+  })),
+
+  updateGrid: (id, updates) => set((state) => ({
+    grids: state.grids.map(g => g.id === id ? { ...g, ...updates } : g)
+  }))
 }))

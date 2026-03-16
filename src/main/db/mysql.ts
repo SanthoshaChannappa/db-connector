@@ -70,3 +70,55 @@ export async function executeMysqlQuery(conn: DBConnection, query: string, value
     await connection.end()
   }
 }
+
+export async function fetchMysqlTableDetails(conn: DBConnection, tableName: string) {
+  const connection = await mysql.createConnection({
+    host: conn.host,
+    user: conn.user,
+    password: conn.password,
+    database: conn.database,
+    port: conn.port,
+    connectTimeout: 5000
+  })
+
+  try {
+    // 1. Get Primary Keys
+    const [pkRows] = await connection.execute(`
+      SHOW KEYS FROM \`${tableName}\` WHERE Key_name = 'PRIMARY'
+    `)
+
+    // 2. Get Foreign Keys (Master tables this table points to)
+    const [fkRows] = await connection.execute(`
+      SELECT 
+        COLUMN_NAME, 
+        REFERENCED_TABLE_NAME, 
+        REFERENCED_COLUMN_NAME 
+      FROM 
+        INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+      WHERE 
+        TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
+    `, [conn.database, tableName])
+
+    // 3. Get Dependent Tables (Tables that reference this table)
+    const [depRows] = await connection.execute(`
+      SELECT 
+        TABLE_NAME 
+      FROM 
+        INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+      WHERE 
+        TABLE_SCHEMA = ? AND REFERENCED_TABLE_NAME = ?
+    `, [conn.database, tableName])
+
+    return {
+      primaryKeys: (pkRows as any[]).map(r => r.Column_name),
+      foreignKeys: (fkRows as any[]).map(r => ({
+        column: r.COLUMN_NAME,
+        referencedTable: r.REFERENCED_TABLE_NAME,
+        referencedColumn: r.REFERENCED_COLUMN_NAME
+      })),
+      dependentTables: [...new Set((depRows as any[]).map(r => r.TABLE_NAME))]
+    }
+  } finally {
+    await connection.end()
+  }
+}

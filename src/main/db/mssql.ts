@@ -121,3 +121,70 @@ export async function executeMssqlQuery(conn: DBConnection, query: string, _valu
     connection.execSql(request)
   })
 }
+
+export async function fetchMssqlTableDetails(conn: DBConnection, tableName: string) {
+  const connection = await createConnection(conn)
+  
+  return new Promise<any>((resolve, reject) => {
+    const primaryKeys: string[] = []
+    const foreignKeys: any[] = []
+    const dependentTables: string[] = []
+    
+    // Batch query to get PK, FK, and Dependent info
+    const query = `
+      -- Primary Keys
+      SELECT COLUMN_NAME
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
+      AND TABLE_NAME = '${tableName}';
+
+      -- Foreign Keys
+      SELECT 
+          COL_NAME(fc.parent_object_id, fc.parent_column_id) AS [column],
+          OBJECT_NAME (f.referenced_object_id) AS referencedTable,
+          COL_NAME(f.referenced_object_id, f.referenced_column_id) AS referencedColumn
+      FROM sys.foreign_keys AS f
+      INNER JOIN sys.foreign_key_columns AS fc 
+         ON f.OBJECT_ID = fc.constraint_object_id
+      WHERE OBJECT_NAME(f.parent_object_id) = '${tableName}';
+
+      -- Dependent Tables
+      SELECT DISTINCT
+          OBJECT_NAME(f.parent_object_id) AS TableName
+      FROM sys.foreign_keys AS f
+      INNER JOIN sys.foreign_key_columns AS fc 
+         ON f.OBJECT_ID = fc.constraint_object_id
+      WHERE OBJECT_NAME(f.referenced_object_id) = '${tableName}';
+    `
+
+    const request = new Request(query, (err) => {
+      if (err) reject(err)
+      else {
+        connection.close()
+        resolve({
+          primaryKeys,
+          foreignKeys,
+          dependentTables: [...new Set(dependentTables)]
+        })
+      }
+    })
+
+    let resultSetIndex = 0
+    request.on('columnMetadata', () => {
+      resultSetIndex++
+    })
+
+    request.on('row', columns => {
+      const rowData: any = {}
+      columns.forEach(col => {
+        rowData[col.metadata.colName] = col.value
+      })
+      
+      if (resultSetIndex === 1) primaryKeys.push(rowData.COLUMN_NAME)
+      else if (resultSetIndex === 2) foreignKeys.push(rowData)
+      else if (resultSetIndex === 3) dependentTables.push(rowData.TableName)
+    })
+
+    connection.execSql(request)
+  })
+}

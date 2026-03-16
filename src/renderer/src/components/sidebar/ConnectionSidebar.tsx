@@ -339,8 +339,10 @@ export function ConnectionSidebar() {
   const {
     activeConnectionId, setActiveConnectionId,
     activeDatabaseName, setActiveDatabaseName,
-    activeTableName, setActiveTableName
+    grids, setPrimaryTable
   } = useAppStore()
+  const activeTableName = grids[0]?.tableName || null
+
   const [isConnDialogOpen, setIsConnDialogOpen] = useState(false)
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false)
   const [editingConnection, setEditingConnection] = useState<DBConnection | undefined>()
@@ -402,7 +404,6 @@ export function ConnectionSidebar() {
       await deleteConnection(conn.id)
       if (activeConnectionId === conn.id) {
         setActiveConnectionId(null)
-        setActiveTableName(null)
       }
     }
   }
@@ -412,7 +413,7 @@ export function ConnectionSidebar() {
   }
 
   const handleSelectTable = (tableName: string) => {
-    setActiveTableName(tableName)
+    setPrimaryTable(tableName)
   }
 
   const handleEditFolder = (folder: ConnectionFolder) => {

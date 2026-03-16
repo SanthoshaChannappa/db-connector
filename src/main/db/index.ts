@@ -1,9 +1,9 @@
 import type { DBConnection } from '../store'
-import { testPgConnection, fetchPgSchema, executePgQuery, fetchPgDatabases } from './pg'
-import { testMysqlConnection, fetchMysqlSchema, executeMysqlQuery, fetchMysqlDatabases } from './mysql'
-import { testMssqlConnection, fetchMssqlSchema, executeMssqlQuery, fetchMssqlDatabases } from './mssql'
+import { testPgConnection, fetchPgSchema, executePgQuery, fetchPgDatabases, fetchPgTableDetails } from './pg'
+import { testMysqlConnection, fetchMysqlSchema, executeMysqlQuery, fetchMysqlDatabases, fetchMysqlTableDetails } from './mysql'
+import { testMssqlConnection, fetchMssqlSchema, executeMssqlQuery, fetchMssqlDatabases, fetchMssqlTableDetails } from './mssql'
 import { testMongoConnection, fetchMongoSchema, executeMongoQuery, fetchMongoDatabases } from './mongo'
-import { testSqliteConnection, fetchSqliteSchema, executeSqliteQuery, fetchSqliteDatabases } from './sqlite'
+import { testSqliteConnection, fetchSqliteSchema, executeSqliteQuery, fetchSqliteDatabases, fetchSqliteTableDetails } from './sqlite'
 
 export async function testConnection(conn: DBConnection): Promise<boolean> {
   switch (conn.driver) {
@@ -45,6 +45,17 @@ export async function executeQuery(conn: DBConnection, query: string, values?: a
     case 'mssql': return executeMssqlQuery(conn, query, values)
     case 'mongodb': return executeMongoQuery(conn, query, values)
     case 'sqlite': return executeSqliteQuery(conn, query, values)
+    default: throw new Error(`Unsupported driver: ${conn.driver}`)
+  }
+}
+
+export async function fetchTableDetails(conn: DBConnection, tableName: string) {
+  switch (conn.driver) {
+    case 'pg': return fetchPgTableDetails(conn, tableName)
+    case 'mysql': return fetchMysqlTableDetails(conn, tableName)
+    case 'mssql': return fetchMssqlTableDetails(conn, tableName)
+    case 'sqlite': return fetchSqliteTableDetails(conn, tableName)
+    case 'mongodb': return { primaryKeys: [], foreignKeys: [], dependentTables: [] }
     default: throw new Error(`Unsupported driver: ${conn.driver}`)
   }
 }

@@ -54,6 +54,14 @@ export function useQueryData(conn: DBConnection | null, query: string, values?: 
   })
 }
 
+export function useTableDetails(conn: DBConnection | null, tableName: string | null) {
+  return useQuery<{ primaryKeys: string[]; foreignKeys: any[]; dependentTables: string[] }>({
+    queryKey: ['table-details', conn?.id, tableName],
+    queryFn: () => window.electron.ipcRenderer.invoke('fetch-table-details', conn, tableName),
+    enabled: !!conn && !!tableName
+  })
+}
+
 // ── Folder hooks ─────────────────────────────────────────────────────────────
 
 export function useFolders() {

@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { getConnections, saveConnection, deleteConnection, getFolders, saveFolder, deleteFolder } from './store'
-import { testConnection, fetchSchema, executeQuery, fetchDatabases } from './db'
+import { testConnection, fetchSchema, executeQuery, fetchDatabases, fetchTableDetails } from './db'
 
 function createWindow(): void {
   // Create the browser window.
@@ -63,6 +63,7 @@ app.whenReady().then(() => {
   ipcMain.handle('test-connection', async (_, conn) => await testConnection(conn))
   ipcMain.handle('fetch-databases', async (_, conn) => await fetchDatabases(conn))
   ipcMain.handle('fetch-schema', async (_, conn) => await fetchSchema(conn))
+  ipcMain.handle('fetch-table-details', async (_, conn, tableName) => await fetchTableDetails(conn, tableName))
   ipcMain.handle('execute-query', async (_, conn, query, values) => await executeQuery(conn, query, values))
 
   createWindow()
