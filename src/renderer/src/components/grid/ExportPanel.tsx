@@ -1,7 +1,5 @@
-import { FileDown, FileText } from 'lucide-react'
+import { FileDown } from 'lucide-react'
 import * as ExcelJS from 'exceljs'
-import jsPDF from 'jspdf'
-import 'jspdf-autotable'
 
 interface ExportPanelProps {
   data: any[]
@@ -30,23 +28,6 @@ export function ExportPanel({ data, fields, tableName }: ExportPanelProps) {
     URL.revokeObjectURL(url)
   }
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF()
-    doc.text(`Export: ${tableName}`, 14, 15)
-    
-    const head = [fields.map(f => f.name)]
-    const body = data.map(row => fields.map(f => String(row[f.name] ?? '')))
-    
-    ;(doc as any).autoTable({
-      head,
-      body,
-      startY: 20,
-      styles: { fontSize: 8 }
-    })
-    
-    doc.save(`${tableName}_export.pdf`)
-  }
-
   return (
     <div className="flex gap-2">
       <button 
@@ -56,15 +37,6 @@ export function ExportPanel({ data, fields, tableName }: ExportPanelProps) {
       >
         <FileDown className="w-4 h-4" />
         <span className="hidden sm:inline">Excel</span>
-      </button>
-      
-      <button 
-        onClick={handleExportPDF}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 text-red-600 hover:bg-red-600/30 rounded-md text-sm font-medium transition-colors"
-        title="Export to PDF"
-      >
-        <FileText className="w-4 h-4" />
-        <span className="hidden sm:inline">PDF</span>
       </button>
     </div>
   )

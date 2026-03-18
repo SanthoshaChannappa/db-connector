@@ -339,9 +339,10 @@ export function ConnectionSidebar() {
   const {
     activeConnectionId, setActiveConnectionId,
     activeDatabaseName, setActiveDatabaseName,
-    grids, setPrimaryTable
+    grids, activeGridId, addTab
   } = useAppStore()
-  const activeTableName = grids[0]?.tableName || null
+  const activeGrid = grids.find(g => g.id === activeGridId)
+  const activeTableName = activeGrid?.tableName || null
 
   const [isConnDialogOpen, setIsConnDialogOpen] = useState(false)
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false)
@@ -413,7 +414,7 @@ export function ConnectionSidebar() {
   }
 
   const handleSelectTable = (tableName: string) => {
-    setPrimaryTable(tableName)
+    addTab(tableName)
   }
 
   const handleEditFolder = (folder: ConnectionFolder) => {
