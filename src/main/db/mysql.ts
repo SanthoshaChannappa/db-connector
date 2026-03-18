@@ -97,7 +97,7 @@ export async function fetchMysqlTableDetails(conn: DBConnection, tableName: stri
         INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
       WHERE 
         TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
-    `, [conn.database, tableName])
+    `, [conn.database || '', tableName])
 
     // 3. Get Dependent Tables (Tables that reference this table)
     const [depRows] = await connection.execute(`
@@ -107,7 +107,7 @@ export async function fetchMysqlTableDetails(conn: DBConnection, tableName: stri
         INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
       WHERE 
         TABLE_SCHEMA = ? AND REFERENCED_TABLE_NAME = ?
-    `, [conn.database, tableName])
+    `, [conn.database || '', tableName])
 
     return {
       primaryKeys: (pkRows as any[]).map(r => r.Column_name),

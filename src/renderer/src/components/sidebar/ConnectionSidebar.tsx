@@ -339,9 +339,9 @@ export function ConnectionSidebar() {
   const {
     activeConnectionId, setActiveConnectionId,
     activeDatabaseName, setActiveDatabaseName,
-    grids, activeGridId, addTab
+    grids, activeTabId, addTab
   } = useAppStore()
-  const activeGrid = grids.find(g => g.id === activeGridId)
+  const activeGrid = grids.find(g => g.tabId === activeTabId)
   const activeTableName = activeGrid?.tableName || null
 
   const [isConnDialogOpen, setIsConnDialogOpen] = useState(false)
