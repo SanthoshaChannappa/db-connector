@@ -17,20 +17,27 @@ export function generateQuery(
     const parts = filters.map(f => {
       const val = f.value
       const escapedVal = val.replace(/'/g, "''")
+      const isExact = f.operator === '='
 
       if (conn.driver === 'mongodb') {
-        return { [f.column]: val }
+        if (isExact) return { [f.column]: val }
+        return { [f.column]: { $regex: val, $options: 'i' } }
       }
       
-      if (conn.driver === 'mysql') {
-        return `\`${f.column}\` LIKE '%${escapedVal}%'`
-      } else if (conn.driver === 'mssql') {
-        return `[${f.column}] LIKE '%${escapedVal}%'`
-      } else if (conn.driver === 'sqlite') {
-        return `"${f.column}" LIKE '%${escapedVal}%'`
+      const columnRef = conn.driver === 'mysql' ? `\`${f.column}\`` : 
+                        conn.driver === 'mssql' ? `[${f.column}]` : 
+                        `"${f.column}"`
+
+      if (isExact) {
+        if (conn.driver === 'pg') {
+          return `CAST(${columnRef} AS TEXT) = '${escapedVal}'`
+        }
+        return `${columnRef} = '${escapedVal}'`
       } else {
-        // Postgres
-        return `CAST("${f.column}" AS TEXT) ILIKE '%${escapedVal}%'`
+        if (conn.driver === 'pg') {
+          return `CAST(${columnRef} AS TEXT) ILIKE '%${escapedVal}%'`
+        }
+        return `${columnRef} LIKE '%${escapedVal}%'`
       }
     })
     
@@ -44,7 +51,11 @@ export function generateQuery(
 
   if (conn.driver === 'mongodb') {
     const mongoFilter = filters.reduce((acc, f) => {
-      acc[f.column] = { $regex: f.value, $options: 'i' }
+      if (f.operator === '=') {
+        acc[f.column] = f.value
+      } else {
+        acc[f.column] = { $regex: f.value, $options: 'i' }
+      }
       return acc
     }, {} as any)
     

@@ -53,10 +53,13 @@ interface AppState {
   activeTabId: string | null
   tabs: Tab[]
   grids: GridState[]
+  sidebarOpen: boolean
   
   setActiveConnectionId: (id: string | null) => void
   setActiveDatabaseName: (name: string | null) => void
   setActiveTabId: (id: string | null) => void
+  toggleSidebar: () => void
+  setSidebarOpen: (open: boolean) => void
   
   // Tab actions
   addTab: (tableName: string) => void
@@ -76,6 +79,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeTabId: null,
   tabs: [],
   grids: [],
+  sidebarOpen: true,
 
   setActiveConnectionId: (id) => set({ 
     activeConnectionId: id, 
@@ -87,6 +91,10 @@ export const useAppStore = create<AppState>((set) => ({
   }),
 
   setActiveTabId: (id) => set({ activeTabId: id }),
+
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   addTab: (tableName) => set((state) => {
     if (!state.activeConnectionId) return state

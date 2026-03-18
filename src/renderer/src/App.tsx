@@ -6,7 +6,7 @@ import { useAppStore } from './store'
 import { useConnections } from './hooks/useDatabase'
 import { generateQuery } from './lib/query-utility'
 import * as ExcelJS from 'exceljs'
-import { Table, X, Edit2, FileDown } from 'lucide-react'
+import { Table, X, Edit2, FileDown, PanelLeft } from 'lucide-react'
 
 const queryClient = new QueryClient()
 
@@ -98,7 +98,16 @@ function EditableTab({
 }
 
 function AppContent() {
-  const { tabs, activeTabId, setActiveTabId, removeTab, renameTab, grids } = useAppStore()
+  const { 
+    tabs, 
+    activeTabId, 
+    setActiveTabId, 
+    removeTab, 
+    renameTab, 
+    grids, 
+    sidebarOpen, 
+    toggleSidebar 
+  } = useAppStore()
   const { data: allConnections } = useConnections()
   const qClient = useQueryClient()
 
@@ -154,11 +163,21 @@ function AppContent() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      <ConnectionSidebar />
+      {sidebarOpen && <ConnectionSidebar />}
       
-      <div className="flex-1 flex flex-col h-full bg-background overflow-hidden border-l border-border/50">
+      <div className={`flex-1 flex flex-col h-full bg-background overflow-hidden transition-all duration-300 ${sidebarOpen ? 'border-l border-border/50' : ''}`}>
         {tabs.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-4">
+          <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+            {!sidebarOpen && (
+              <button 
+                onClick={toggleSidebar}
+                className="absolute top-4 left-4 p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all shadow-sm border border-primary/20 group"
+                title="Show Sidebar"
+              >
+                <PanelLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              </button>
+            )}
+            
             <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mb-6 ring-1 ring-border/50 shadow-inner">
               <Table className="w-10 h-10 text-muted-foreground/20" />
             </div>
@@ -166,11 +185,30 @@ function AppContent() {
             <p className="text-muted-foreground text-sm max-w-[280px] text-center mb-8 leading-relaxed">
               Open a table from the sidebar to start a new investigation tab.
             </p>
+            
+            {!sidebarOpen && (
+              <button 
+                onClick={toggleSidebar}
+                className="px-6 py-2.5 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-all font-medium shadow-md active:scale-95"
+              >
+                Show Sidebar to Begin
+              </button>
+            )}
           </div>
         ) : (
           <>
             {/* Tab Bar */}
-            <div className="h-10 border-b border-border bg-muted/20 flex items-center overflow-x-auto scrollbar-hide shrink-0 px-2 gap-1">
+            <div className="h-10 border-b border-border bg-muted/20 flex items-center overflow-x-auto overflow-y-hidden scrollbar-hide shrink-0 px-2 gap-1">
+              <button 
+                onClick={toggleSidebar}
+                className={`p-1.5 hover:bg-secondary rounded-md transition-all mr-1 ${
+                  !sidebarOpen ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+                }`}
+                title={sidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
+              >
+                <PanelLeft className="w-4 h-4" />
+              </button>
+              
               {tabs.map((tab) => (
                 <EditableTab
                   key={tab.id}

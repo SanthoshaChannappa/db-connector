@@ -68,6 +68,12 @@
   }
 }
 
-html.dark {
-  /* Using standard dark, but since we default to dark, :root is ALREADY dark. */
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
