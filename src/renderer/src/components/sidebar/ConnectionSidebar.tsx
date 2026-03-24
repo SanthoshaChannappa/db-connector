@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Database, ChevronRight, ChevronDown, Table2,
   Edit2, Trash2, Search, Folder, FolderOpen, FolderPlus,
-  DatabaseZap
+  DatabaseZap, Terminal
 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import type { DBConnection, ConnectionFolder } from '../../store'
@@ -94,7 +94,8 @@ function DatabaseItem({
   activeDatabaseName,
   activeTableName,
   onSelectDatabase,
-  onSelectTable
+  onSelectTable,
+  onOpenQuery
 }: {
   dbName: string
   conn: DBConnection
@@ -103,7 +104,9 @@ function DatabaseItem({
   activeTableName: string | null
   onSelectDatabase: (dbName: string) => void
   onSelectTable: (tableName: string) => void
+  onOpenQuery: (dbName: string) => void
 }) {
+  const [tableSearch, setTableSearch] = useState('')
   const [expanded, setExpanded] = useState(false)
 
   // Fetch tables only when this database is expanded — scope conn to the chosen database
@@ -117,8 +120,12 @@ function DatabaseItem({
     onSelectDatabase(dbName)
   }
 
+  const filteredSchema = tableSearch.trim()
+    ? schema?.filter(item => item.name.toLowerCase().includes(tableSearch.toLowerCase()))
+    : schema
+
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col group/db">
       <div className={`flex items-center gap-1.5 px-2 py-1 text-sm rounded-md w-full transition-colors ${
         isActiveDb && !expanded ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
       }`}>
@@ -130,12 +137,33 @@ function DatabaseItem({
           <DatabaseZap className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
           <span className="truncate">{dbName}</span>
         </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onOpenQuery(dbName) }}
+          className="p-1 hover:bg-primary/20 hover:text-primary rounded-md opacity-0 group-hover/db:opacity-100 transition-opacity"
+          title="Open Query Tab"
+        >
+          <Terminal className="w-3 h-3" />
+        </button>
       </div>
 
       {expanded && (
         <div className="ml-5 flex flex-col gap-0.5 mt-0.5 border-l border-border pl-2">
+          {schema && schema.length > 5 && (
+            <div className="px-1 py-1 sticky top-0 bg-card z-10 mb-1">
+              <div className="relative">
+                <Search className="w-2.5 h-2.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                <input 
+                  type="text" 
+                  placeholder="Filter tables..."
+                  className="w-full h-6 pl-6 pr-2 text-[10px] bg-secondary/50 border border-border rounded-md focus:outline-none focus:border-primary/50"
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
           {isLoading && <span className="text-xs text-muted-foreground py-1 px-1">Loading tables...</span>}
-          {schema?.map(item => (
+          {filteredSchema?.map(item => (
             <button
               key={item.name}
               onClick={() => { onSelectDatabase(dbName); onSelectTable(item.name) }}
@@ -149,7 +177,11 @@ function DatabaseItem({
               <span className="truncate">{item.name}</span>
             </button>
           ))}
-          {schema?.length === 0 && <span className="text-xs text-muted-foreground py-1 px-1">No tables found</span>}
+          {filteredSchema?.length === 0 && (
+            <span className="text-xs text-muted-foreground py-1 px-1 italic opacity-70">
+              {tableSearch ? 'No match found' : 'No tables found'}
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -179,6 +211,7 @@ function ConnectionItem({
   onEdit: () => void
   onDelete: () => void
 }) {
+  const { addQueryTab } = useAppStore()
   const [expanded, setExpanded] = useState(false)
   const { data: databases, isLoading } = useDatabases(expanded ? conn : null)
   const isActive = activeConnectionId === conn.id
@@ -225,6 +258,7 @@ function ConnectionItem({
               activeTableName={activeTableName}
               onSelectDatabase={onSelectDatabase}
               onSelectTable={onSelectTable}
+              onOpenQuery={(dbName) => addQueryTab(dbName)}
             />
           ))}
           {databases?.length === 0 && (

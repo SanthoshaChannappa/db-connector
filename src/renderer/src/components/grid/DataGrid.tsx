@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useAppStore } from '../../store'
 import { useConnections, useQueryData, useTableDetails, useInsertRow, useUpdateRow, useDeleteRow } from '../../hooks/useDatabase'
 import { ExportPanel } from './ExportPanel'
-import { Link as LinkIcon, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp, X, Search, RefreshCw, Terminal, Copy, Check, Plus, Trash2, Edit2, Save, RotateCcw } from 'lucide-react'
+import { Link as LinkIcon, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp, X, Search, RefreshCw, Terminal, Plus, Trash2, Edit2, Save, RotateCcw, FileDown } from 'lucide-react'
+import * as ExcelJS from 'exceljs'
 
 import { generateQuery } from '../../lib/query-utility'
 
@@ -16,7 +17,8 @@ export function DataGrid({ gridId }: DataGridProps) {
     pushGrid,
     removeGrid,
     toggleGridCollapse,
-    updateGrid
+    updateGrid,
+    addQueryTab
   } = useAppStore()
 
   const grid = grids.find(g => g.id === gridId)
@@ -29,8 +31,6 @@ export function DataGrid({ gridId }: DataGridProps) {
 
   // Local state
   const [draftFilters, setDraftFilters] = useState<Record<string, string>>({})
-  const [showQueryModal, setShowQueryModal] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null)
   const [editingData, setEditingData] = useState<any>(null)
   const [isInserting, setIsInserting] = useState(false)
@@ -77,13 +77,29 @@ export function DataGrid({ gridId }: DataGridProps) {
     refetchCount()
   }
 
+  const handleExportExcel = async () => {
+    if (!data || data.rows.length === 0) return
+
+    const workbook = new ExcelJS.Workbook()
+    const sheet = workbook.addWorksheet(activeTableName.substring(0, 31))
+    
+    sheet.columns = data.fields.map(f => ({ header: f.name, key: f.name, width: 20 }))
+    data.rows.forEach(row => {
+      sheet.addRow(row)
+    })
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${activeTableName.replace(/[^a-z0-9]/gi, '_')}_export.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const isRefreshing = isFetchingData || isFetchingCount
 
-  const handleCopyQuery = () => {
-    navigator.clipboard.writeText(query)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   const handleApplyFilters = () => {
     const newFilters = Object.entries(draftFilters)
@@ -228,11 +244,19 @@ export function DataGrid({ gridId }: DataGridProps) {
           {!isCollapsed && data && (
             <>
               <button 
-                onClick={() => setShowQueryModal(true)}
+                onClick={() => addQueryTab(databaseName || '', query)}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground"
-                title="View Query"
+                title="Open in Query Tab"
               >
                 <Terminal className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={handleExportExcel}
+                disabled={!data || data.rows.length === 0}
+                className="p-1.5 hover:bg-green-600/10 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground rounded-md transition-all text-muted-foreground group"
+                title="Export this grid to Excel"
+              >
+                <FileDown className="w-4 h-4 group-hover:animate-bounce" />
               </button>
               <button 
                 onClick={handleRefresh}
@@ -266,56 +290,6 @@ export function DataGrid({ gridId }: DataGridProps) {
         </div>
       </div>
 
-      {/* Query Modal */}
-      {showQueryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-2xl bg-card border border-border rounded-xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
-            <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
-              <div className="flex items-center gap-2">
-                <Terminal className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-base">Execution Query</h3>
-              </div>
-              <button
-                onClick={() => setShowQueryModal(false)}
-                className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 overflow-y-auto bg-muted/30 flex-1">
-              <pre className="font-mono text-sm text-foreground/90 p-4 bg-background border border-border rounded-lg whitespace-pre-wrap break-all leading-relaxed">
-                {query}
-              </pre>
-            </div>
-
-            <div className="p-4 border-t border-border flex justify-end gap-3 shrink-0 bg-muted/10">
-              <button
-                onClick={handleCopyQuery}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-sm font-medium transition-all shadow-sm active:scale-95"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    <span>Copy to Clipboard</span>
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => setShowQueryModal(false)}
-                className="px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md text-sm font-medium transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Delete Modal */}
       {showDeleteModal && (
@@ -437,7 +411,7 @@ export function DataGrid({ gridId }: DataGridProps) {
                         <td className="px-4 py-2 text-center border-r border-border sticky left-0 bg-background/80 z-20">
                           <div className="flex items-center gap-1 justify-center">
                             <button onClick={handleInsertRow} className="p-1 text-green-500 hover:bg-green-500/10 rounded" title="Save">
-                              <Check className="w-4 h-4" />
+                              <Save className="w-4 h-4" />
                             </button>
                             <button onClick={() => setIsInserting(false)} className="p-1 text-red-500 hover:bg-red-500/10 rounded" title="Cancel">
                               <X className="w-4 h-4" />

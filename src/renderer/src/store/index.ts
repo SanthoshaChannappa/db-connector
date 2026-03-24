@@ -33,6 +33,9 @@ export interface SortState {
 export interface Tab {
   id: string
   title: string
+  type: 'table' | 'query'
+  databaseName?: string
+  queryText?: string
 }
 
 export interface GridState {
@@ -66,6 +69,8 @@ interface AppState {
   addTab: (tableName: string) => void
   removeTab: (id: string) => void
   renameTab: (id: string, title: string) => void
+  updateTab: (id: string, updates: Partial<Tab>) => void
+  addQueryTab: (databaseName: string, initialQuery?: string) => void
   
   // Grid actions
   pushGrid: (tableName: string, filter: QueryFilter, sourceGridId: string) => void
@@ -103,7 +108,7 @@ export const useAppStore = create<AppState>((set) => ({
     const tabId = Math.random().toString(36).substr(2, 9)
     const gridId = Math.random().toString(36).substr(2, 9)
     return {
-      tabs: [...state.tabs, { id: tabId, title: tableName }],
+      tabs: [...state.tabs, { id: tabId, title: tableName, type: 'table' }],
       grids: [
         ...state.grids,
         {
@@ -119,6 +124,21 @@ export const useAppStore = create<AppState>((set) => ({
           isCollapsed: false
         }
       ],
+      activeTabId: tabId
+    }
+  }),
+
+  addQueryTab: (databaseName, initialQuery) => set((state) => {
+    if (!state.activeConnectionId) return state
+    const tabId = Math.random().toString(36).substr(2, 9)
+    return {
+      tabs: [...state.tabs, { 
+        id: tabId, 
+        title: `Query: ${databaseName}`, 
+        type: 'query',
+        databaseName,
+        queryText: initialQuery || '-- Write your query here\nSELECT * FROM ...' 
+      }],
       activeTabId: tabId
     }
   }),
@@ -139,6 +159,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   renameTab: (id, title) => set((state) => ({
     tabs: state.tabs.map(t => t.id === id ? { ...t, title } : t)
+  })),
+
+  updateTab: (id, updates) => set((state) => ({
+    tabs: state.tabs.map(t => t.id === id ? { ...t, ...updates } : t)
   })),
 
   pushGrid: (tableName, filter, sourceGridId) => set((state) => {

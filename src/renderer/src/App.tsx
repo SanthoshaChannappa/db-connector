@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react'
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
 import { ConnectionSidebar } from './components/sidebar/ConnectionSidebar'
 import { DataGrid } from './components/grid/DataGrid'
+import { QueryEditor } from './components/query/QueryEditor'
 import { useAppStore } from './store'
 import { useConnections } from './hooks/useDatabase'
 import { generateQuery } from './lib/query-utility'
 import * as ExcelJS from 'exceljs'
-import { Table, X, Edit2, FileDown, PanelLeft } from 'lucide-react'
+import { Table, X, Edit2, FileDown, PanelLeft, Terminal } from 'lucide-react'
 
 const queryClient = new QueryClient()
 
@@ -54,7 +55,11 @@ function EditableTab({
       }`}
     >
       <div className="flex items-center gap-2 overflow-hidden w-full">
-        <Table className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`} />
+        {tab.type === 'query' ? (
+          <Terminal className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`} />
+        ) : (
+          <Table className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`} />
+        )}
         
         {isEditing ? (
           <form onSubmit={handleRename} className="flex-1 min-w-0" onClick={e => e.stopPropagation()}>
@@ -241,23 +246,28 @@ function AppContent() {
                       </h2>
                     </div>
                     
-                    <button 
-                      onClick={() => handleExportTabExcel(tab.id)}
-                      className="flex items-center gap-2.5 px-3.5 py-1.5 bg-green-600/10 text-green-600 hover:bg-green-600 text-xs font-semibold hover:text-white rounded-lg transition-all border border-green-600/20 hover:border-green-600 shadow-sm active:scale-95 group"
-                      title="Export all tables in this tab to a single Excel file"
-                    >
-                      <FileDown className="w-4 h-4 group-hover:animate-bounce" />
-                      <span>Export Tab (Excel)</span>
-                    </button>
+                    {tab.type === 'table' && (
+                      <button 
+                        onClick={() => handleExportTabExcel(tab.id)}
+                        className="flex items-center gap-2.5 px-3.5 py-1.5 bg-green-600/10 text-green-600 hover:bg-green-600 text-xs font-semibold hover:text-white rounded-lg transition-all border border-green-600/20 hover:border-green-600 shadow-sm active:scale-95 group"
+                        title="Export all tables in this tab to a single Excel file"
+                      >
+                        <FileDown className="w-4 h-4 group-hover:animate-bounce" />
+                        <span>Export Tab (Excel)</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-8 scroll-smooth pb-20">
-                    {grids
-                      .filter(g => g.tabId === tab.id)
-                      .map((grid) => (
-                        <DataGrid key={grid.id} gridId={grid.id} />
-                      ))
-                    }
+                    {tab.type === 'query' ? (
+                      <QueryEditor tabId={tab.id} />
+                    ) : (
+                      grids
+                        .filter(g => g.tabId === tab.id)
+                        .map((grid) => (
+                          <DataGrid key={grid.id} gridId={grid.id} />
+                        ))
+                    )}
                   </div>
                 </div>
               ))}
