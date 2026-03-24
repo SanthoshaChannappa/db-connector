@@ -9,6 +9,7 @@ export interface DBConnection {
   user?: string
   password?: string
   database?: string
+  ssl?: boolean
   folderId?: string
 }
 
@@ -114,7 +115,7 @@ export const useAppStore = create<AppState>((set) => ({
           filters: [],
           sortState: null,
           page: 1,
-          pageSize: 25,
+          pageSize: 10,
           isCollapsed: false
         }
       ],
@@ -157,7 +158,7 @@ export const useAppStore = create<AppState>((set) => ({
           filters: [filter],
           sortState: null,
           page: 1,
-          pageSize: 25,
+          pageSize: 10,
           isCollapsed: false
         }
       ]

@@ -59,9 +59,12 @@ export function generateQuery(
       return acc
     }, {} as any)
     
+    const mongoSort = sortState ? { [sortState.column]: sortState.direction === 'asc' ? 1 : -1 } : {}
+    
     query = JSON.stringify({ 
       collection: tableName, 
       filter: mongoFilter,
+      sort: mongoSort,
       limit: pageSize, 
       skip: offset 
     }, null, 2)
@@ -71,16 +74,20 @@ export function generateQuery(
       count: true 
     }, null, 2)
   } else {
-    const orderBy = sortState ? ` ORDER BY "${sortState.column}" ${sortState.direction}` : ' ORDER BY (SELECT NULL)'
+    const columnQuote = conn.driver === 'mysql' ? '`' : 
+                        conn.driver === 'mssql' ? '[' : '"'
+    const columnQuoteEnd = conn.driver === 'mssql' ? ']' : columnQuote
+
+    const orderBy = sortState 
+      ? ` ORDER BY ${columnQuote}${sortState.column}${columnQuoteEnd} ${sortState.direction.toUpperCase()}` 
+      : (conn.driver === 'mssql' ? ' ORDER BY (SELECT NULL)' : '')
     
     if (conn.driver === 'mssql') {
       query = `SELECT * FROM [${tableName}]${whereClause}${orderBy} OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`
       countQuery = `SELECT COUNT(*) as total FROM [${tableName}]${whereClause}`
     } else if (conn.driver === 'mysql') {
-      const mysqlOrder = orderBy.replace(/"/g, '`')
-      const mysqlWhere = whereClause.replace(/"/g, '`')
-      query = `SELECT * FROM \`${tableName}\`${mysqlWhere}${mysqlOrder} LIMIT ${pageSize} OFFSET ${offset}`
-      countQuery = `SELECT COUNT(*) as total FROM \`${tableName}\`${mysqlWhere}`
+      query = `SELECT * FROM \`${tableName}\`${whereClause}${orderBy} LIMIT ${pageSize} OFFSET ${offset}`
+      countQuery = `SELECT COUNT(*) as total FROM \`${tableName}\`${whereClause}`
     } else {
       query = `SELECT * FROM "${tableName}"${whereClause}${orderBy} LIMIT ${pageSize} OFFSET ${offset}`
       countQuery = `SELECT COUNT(*) as total FROM "${tableName}"${whereClause}`

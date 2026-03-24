@@ -1,9 +1,10 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { getConnections, saveConnection, deleteConnection, getFolders, saveFolder, deleteFolder } from './store'
-import { testConnection, fetchSchema, executeQuery, fetchDatabases, fetchTableDetails } from './db'
+import { testConnection, fetchSchema, executeQuery, fetchDatabases, fetchTableDetails, insertRow, updateRow, deleteRow } from './db'
+import type { DBConnection } from './store'
 
 function createWindow(): void {
   // Create the browser window.
@@ -65,6 +66,11 @@ app.whenReady().then(() => {
   ipcMain.handle('fetch-schema', async (_, conn) => await fetchSchema(conn))
   ipcMain.handle('fetch-table-details', async (_, conn, tableName) => await fetchTableDetails(conn, tableName))
   ipcMain.handle('execute-query', async (_, conn, query, values) => await executeQuery(conn, query, values))
+  ipcMain.handle('insert-row', async (_, conn, tableName, row) => await insertRow(conn, tableName, row))
+  ipcMain.handle('update-row', async (_, conn, tableName, pkKeys, oldRow, newRow) => await updateRow(conn, tableName, pkKeys, oldRow, newRow))
+  ipcMain.handle('delete-row', (_, conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade: boolean) => {
+    return deleteRow(conn, tableName, pkKeys, row, cascade)
+  })
 
   createWindow()
 

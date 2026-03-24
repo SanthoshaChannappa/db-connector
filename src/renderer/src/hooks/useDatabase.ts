@@ -91,3 +91,39 @@ export function useDeleteFolder() {
     }
   })
 }
+
+// ── CRUD hooks ───────────────────────────────────────────────────────────────
+
+export function useInsertRow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conn, tableName, row }: { conn: DBConnection; tableName: string; row: any }) =>
+      window.electron.ipcRenderer.invoke('insert-row', conn, tableName, row),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['query', variables.conn.id] })
+    }
+  })
+}
+
+export function useUpdateRow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conn, tableName, pkKeys, oldRow, newRow }: { conn: DBConnection; tableName: string; pkKeys: string[]; oldRow: any; newRow: any }) =>
+      window.electron.ipcRenderer.invoke('update-row', conn, tableName, pkKeys, oldRow, newRow),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['query', variables.conn.id] })
+    }
+  })
+}
+
+export function useDeleteRow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conn, tableName, pkKeys, row, cascade }: { conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade?: boolean }) => 
+      window.api.deleteRow(conn, tableName, pkKeys, row, cascade || false),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['query-data'] })
+      queryClient.invalidateQueries({ queryKey: ['count-data'] })
+    }
+  })
+}

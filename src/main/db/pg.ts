@@ -9,7 +9,7 @@ export async function testPgConnection(conn: DBConnection) {
     password: conn.password,
     port: conn.port,
     connectionTimeoutMillis: 5000,
-    ssl: false
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
   })
   await client.connect()
   await client.end()
@@ -23,11 +23,9 @@ export async function fetchPgDatabases(conn: DBConnection) {
     password: conn.password,
     port: conn.port,
     connectionTimeoutMillis: 5000,
-    ssl: false
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
   })
-  // Usually connect to 'postgres' database to list all databases
   client.database = 'postgres'
-  
   await client.connect()
   const res = await client.query(`
     SELECT datname 
@@ -46,7 +44,7 @@ export async function fetchPgSchema(conn: DBConnection) {
     password: conn.password,
     port: conn.port,
     connectionTimeoutMillis: 5000,
-    ssl: false
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
   })
   await client.connect()
   const res = await client.query(`
@@ -67,7 +65,7 @@ export async function executePgQuery(conn: DBConnection, query: string, values?:
     password: conn.password,
     port: conn.port,
     connectionTimeoutMillis: 5000,
-    ssl: false
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
   })
   await client.connect()
   try {
@@ -89,11 +87,10 @@ export async function fetchPgTableDetails(conn: DBConnection, tableName: string)
     password: conn.password,
     port: conn.port,
     connectionTimeoutMillis: 5000,
-    ssl: false
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
   })
   await client.connect()
   try {
-    // 1. Get Primary Keys
     const pkRes = await client.query(`
       SELECT a.attname
       FROM   pg_index i
@@ -102,7 +99,6 @@ export async function fetchPgTableDetails(conn: DBConnection, tableName: string)
       AND    i.indisprimary;
     `, [tableName])
 
-    // 2. Get Foreign Keys (Master tables this table points to)
     const fkRes = await client.query(`
       SELECT
           kcu.column_name, 
@@ -119,19 +115,12 @@ export async function fetchPgTableDetails(conn: DBConnection, tableName: string)
       WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name=$1;
     `, [tableName])
 
-    // 3. Get Dependent Tables (Tables that reference this table)
     const depRes = await client.query(`
-      SELECT
-          tc.table_name
-      FROM 
-          information_schema.table_constraints AS tc 
-          JOIN information_schema.key_column_usage AS kcu
-            ON tc.constraint_name = kcu.constraint_name
-            AND tc.table_schema = kcu.table_schema
-          JOIN information_schema.constraint_column_usage AS ccu
-            ON ccu.constraint_name = tc.constraint_name
-            AND ccu.table_schema = tc.table_schema
-      WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name=$1;
+      SELECT tc.table_name, kcu.column_name
+      FROM information_schema.table_constraints AS tc
+      JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+      WHERE constraint_type = 'FOREIGN KEY' AND ccu.table_name = $1
     `, [tableName])
 
     return {
@@ -141,8 +130,98 @@ export async function fetchPgTableDetails(conn: DBConnection, tableName: string)
         referencedTable: r.foreign_table_name,
         referencedColumn: r.foreign_column_name
       })),
-      dependentTables: [...new Set(depRes.rows.map(r => r.table_name))]
+      dependentTables: depRes.rows.map(r => ({ table: r.table_name, column: r.column_name }))
     }
+  } finally {
+    await client.end()
+  }
+}
+
+export async function insertPgRow(conn: DBConnection, tableName: string, row: any) {
+  const client = new Client({
+    user: conn.user,
+    host: conn.host,
+    database: conn.database,
+    password: conn.password,
+    port: conn.port,
+    connectionTimeoutMillis: 5000,
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
+  })
+  await client.connect()
+  try {
+    const columns = Object.keys(row).map(c => `"${c}"`).join(', ')
+    const placeholders = Object.keys(row).map((_, i) => `$${i + 1}`).join(', ')
+    const values = Object.values(row)
+    const query = `INSERT INTO "${tableName}" (${columns}) VALUES (${placeholders})`
+    await client.query(query, values)
+    return true
+  } finally {
+    await client.end()
+  }
+}
+
+export async function updatePgRow(conn: DBConnection, tableName: string, pkKeys: string[], oldRow: any, newRow: any) {
+  const client = new Client({
+    user: conn.user,
+    host: conn.host,
+    database: conn.database,
+    password: conn.password,
+    port: conn.port,
+    connectionTimeoutMillis: 5000,
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
+  })
+  await client.connect()
+  try {
+    const setParts: string[] = []
+    const values: any[] = []
+    let i = 1
+    Object.entries(newRow).forEach(([col, val]) => {
+      setParts.push(`"${col}" = $${i++}`)
+      values.push(val)
+    })
+    const whereParts: string[] = []
+    pkKeys.forEach(pk => {
+      whereParts.push(`"${pk}" = $${i++}`)
+      values.push(oldRow[pk])
+    })
+    const query = `UPDATE "${tableName}" SET ${setParts.join(', ')} WHERE ${whereParts.join(' AND ')}`
+    await client.query(query, values)
+    return true
+  } finally {
+    await client.end()
+  }
+}
+
+export async function deletePgRow(conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade = false) {
+  const client = new Client({
+    user: conn.user,
+    host: conn.host,
+    database: conn.database,
+    password: conn.password,
+    port: conn.port,
+    connectionTimeoutMillis: 5000,
+    ssl: conn.ssl ? { rejectUnauthorized: false } : false
+  })
+  await client.connect()
+  try {
+    if (cascade) {
+      const details = await fetchPgTableDetails(conn, tableName)
+      for (const dep of details.dependentTables) {
+        const pkValue = row[pkKeys[0]]
+        const query = `DELETE FROM "${dep.table}" WHERE "${dep.column}" = $1`
+        await client.query(query, [pkValue])
+      }
+    }
+    const whereParts: string[] = []
+    const values: any[] = []
+    let i = 1
+    pkKeys.forEach(pk => {
+      whereParts.push(`"${pk}" = $${i++}`)
+      values.push(row[pk])
+    })
+    const query = `DELETE FROM "${tableName}" WHERE ${whereParts.join(' AND ')}`
+    await client.query(query, values)
+    return true
   } finally {
     await client.end()
   }

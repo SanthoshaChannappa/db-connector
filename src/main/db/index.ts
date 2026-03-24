@@ -1,9 +1,9 @@
 import type { DBConnection } from '../store'
-import { testPgConnection, fetchPgSchema, executePgQuery, fetchPgDatabases, fetchPgTableDetails } from './pg'
-import { testMysqlConnection, fetchMysqlSchema, executeMysqlQuery, fetchMysqlDatabases, fetchMysqlTableDetails } from './mysql'
-import { testMssqlConnection, fetchMssqlSchema, executeMssqlQuery, fetchMssqlDatabases, fetchMssqlTableDetails } from './mssql'
-import { testMongoConnection, fetchMongoSchema, executeMongoQuery, fetchMongoDatabases } from './mongo'
-import { testSqliteConnection, fetchSqliteSchema, executeSqliteQuery, fetchSqliteDatabases, fetchSqliteTableDetails } from './sqlite'
+import { testPgConnection, fetchPgSchema, executePgQuery, fetchPgDatabases, fetchPgTableDetails, insertPgRow, updatePgRow, deletePgRow } from './pg'
+import { testMysqlConnection, fetchMysqlSchema, executeMysqlQuery, fetchMysqlDatabases, fetchMysqlTableDetails, insertMysqlRow, updateMysqlRow, deleteMysqlRow } from './mysql'
+import { testMssqlConnection, fetchMssqlSchema, executeMssqlQuery, fetchMssqlDatabases, fetchMssqlTableDetails, insertMssqlRow, updateMssqlRow, deleteMssqlRow } from './mssql'
+import { testMongoConnection, fetchMongoSchema, executeMongoQuery, fetchMongoDatabases, insertMongoRow, updateMongoRow, deleteMongoRow } from './mongo'
+import { testSqliteConnection, fetchSqliteSchema, executeSqliteQuery, fetchSqliteDatabases, fetchSqliteTableDetails, insertSqliteRow, updateSqliteRow, deleteSqliteRow } from './sqlite'
 
 export async function testConnection(conn: DBConnection): Promise<boolean> {
   switch (conn.driver) {
@@ -55,7 +55,40 @@ export async function fetchTableDetails(conn: DBConnection, tableName: string) {
     case 'mysql': return fetchMysqlTableDetails(conn, tableName)
     case 'mssql': return fetchMssqlTableDetails(conn, tableName)
     case 'sqlite': return fetchSqliteTableDetails(conn, tableName)
-    case 'mongodb': return { primaryKeys: [], foreignKeys: [], dependentTables: [] }
+    case 'mongodb': return { primaryKeys: ['_id'], foreignKeys: [], dependentTables: [] }
     default: throw new Error(`Unsupported driver: ${conn.driver}`)
+  }
+}
+
+export async function insertRow(conn: DBConnection, tableName: string, row: any) {
+  switch (conn.driver) {
+    case 'pg': return insertPgRow(conn, tableName, row)
+    case 'mysql': return insertMysqlRow(conn, tableName, row)
+    case 'mssql': return insertMssqlRow(conn, tableName, row)
+    case 'mongodb': return insertMongoRow(conn, tableName, row)
+    case 'sqlite': return insertSqliteRow(conn, tableName, row)
+    default: throw new Error(`Insert not supported for ${conn.driver}`)
+  }
+}
+
+export async function updateRow(conn: DBConnection, tableName: string, pkKeys: string[], oldRow: any, newRow: any) {
+  switch (conn.driver) {
+    case 'pg': return updatePgRow(conn, tableName, pkKeys, oldRow, newRow)
+    case 'mysql': return updateMysqlRow(conn, tableName, pkKeys, oldRow, newRow)
+    case 'mssql': return updateMssqlRow(conn, tableName, pkKeys, oldRow, newRow)
+    case 'mongodb': return updateMongoRow(conn, tableName, pkKeys, oldRow, newRow)
+    case 'sqlite': return updateSqliteRow(conn, tableName, pkKeys, oldRow, newRow)
+    default: throw new Error(`Update not supported for ${conn.driver}`)
+  }
+}
+
+export async function deleteRow(conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade = false) {
+  switch (conn.driver) {
+    case 'pg': return deletePgRow(conn, tableName, pkKeys, row, cascade)
+    case 'mysql': return deleteMysqlRow(conn, tableName, pkKeys, row, cascade)
+    case 'mssql': return deleteMssqlRow(conn, tableName, pkKeys, row, cascade)
+    case 'mongodb': return deleteMongoRow(conn, tableName, pkKeys, row) // Mongo doesn't have FKs in the same way
+    case 'sqlite': return deleteSqliteRow(conn, tableName, pkKeys, row, cascade)
+    default: throw new Error(`Delete not supported for ${conn.driver}`)
   }
 }

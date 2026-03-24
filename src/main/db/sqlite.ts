@@ -57,14 +57,16 @@ export async function fetchSqliteTableDetails(conn: DBConnection, tableName: str
 
     // 3. Dependent Tables (Scanning sqlite_master for other tables that reference this one)
     const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[]
-    const dependentTables: string[] = []
+    const dependentTables: { table: string, column: string }[] = []
 
     for (const t of allTables) {
       if (t.name === tableName) continue
       const otherFks = db.prepare(`PRAGMA foreign_key_list('${t.name}')`).all() as any[]
-      if (otherFks.some(f => f.table === tableName)) {
-        dependentTables.push(t.name)
-      }
+      otherFks.forEach(f => {
+        if (f.table === tableName) {
+          dependentTables.push({ table: t.name, column: f.from })
+        }
+      })
     }
 
     return {
@@ -72,6 +74,73 @@ export async function fetchSqliteTableDetails(conn: DBConnection, tableName: str
       foreignKeys,
       dependentTables
     }
+  } finally {
+    db.close()
+  }
+}
+
+export async function insertSqliteRow(conn: DBConnection, tableName: string, row: any) {
+  const db = new Database(conn.host || ':memory:')
+  try {
+    const columns = Object.keys(row).map(c => `"${c}"`).join(', ')
+    const placeholders = Object.keys(row).map(() => '?').join(', ')
+    const values = Object.values(row)
+    const query = `INSERT INTO "${tableName}" (${columns}) VALUES (${placeholders})`
+    db.prepare(query).run(values)
+    return true
+  } finally {
+    db.close()
+  }
+}
+
+export async function updateSqliteRow(conn: DBConnection, tableName: string, pkKeys: string[], oldRow: any, newRow: any) {
+  const db = new Database(conn.host || ':memory:')
+  try {
+    const setParts: string[] = []
+    const values: any[] = []
+
+    Object.entries(newRow).forEach(([col, val]) => {
+      setParts.push(`"${col}" = ?`)
+      values.push(val)
+    })
+
+    const whereParts: string[] = []
+    pkKeys.forEach(pk => {
+      whereParts.push(`"${pk}" = ?`)
+      values.push(oldRow[pk])
+    })
+
+    const query = `UPDATE "${tableName}" SET ${setParts.join(', ')} WHERE ${whereParts.join(' AND ')}`
+    db.prepare(query).run(values)
+    return true
+  } finally {
+    db.close()
+  }
+}
+
+export async function deleteSqliteRow(conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade = false) {
+  const db = new Database(conn.host || ':memory:')
+  try {
+    if (cascade) {
+      const details = await fetchSqliteTableDetails(conn, tableName)
+      for (const dep of details.dependentTables) {
+        const pkValue = row[pkKeys[0]]
+        const query = `DELETE FROM "${dep.table}" WHERE "${dep.column}" = ?`
+        db.prepare(query).run([pkValue])
+      }
+    }
+
+    const whereParts: string[] = []
+    const values: any[] = []
+
+    pkKeys.forEach(pk => {
+      whereParts.push(`"${pk}" = ?`)
+      values.push(row[pk])
+    })
+
+    const query = `DELETE FROM "${tableName}" WHERE ${whereParts.join(' AND ')}`
+    db.prepare(query).run(values)
+    return true
   } finally {
     db.close()
   }

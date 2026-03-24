@@ -12,6 +12,7 @@ export interface DBConnection {
   user?: string
   password?: string
   database?: string
+  ssl?: boolean
   folderId?: string
 }
 

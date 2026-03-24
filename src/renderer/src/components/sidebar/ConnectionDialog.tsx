@@ -18,6 +18,7 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
       user: '',
       password: '',
       database: '',
+      ssl: false,
       folderId: undefined
     }
   )
@@ -136,6 +137,16 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </select>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-border text-primary focus:ring-ring"
+              checked={formData.ssl || false}
+              onChange={e => setFormData({ ...formData, ssl: e.target.checked })}
+            />
+            Use SSL/TLS (Required for RDS Proxy)
           </label>
         </div>
 
