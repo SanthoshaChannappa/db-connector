@@ -1,0 +1,33 @@
+name: Manual version update
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version for the project"
+        required: true
+        type: string
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        # Use a PAT if the GITHUB_TOKEN lacks sufficient permissions
+        uses: actions/checkout@v4 
+        with:
+          token: ${{ secrets.MY_PAT }} # Use a fine-grained Personal Access Token (PAT)
+          
+      - name: Update version in file and push changes
+        run: |
+          # Use sed (or another tool) to replace the version in your file
+          # Example for a simple VERSION file:
+          echo "${{ github.event.inputs.version }}" > VERSION
+
+          # Configure git user
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Stage, commit, and push the changes
+          git add VERSION
+          git commit -m "Update version to ${{ github.event.inputs.version }}"
+          git push
