@@ -21,7 +21,7 @@ export async function fetchSqliteSchema(conn: DBConnection) {
       WHERE type='table' AND name NOT LIKE 'sqlite_%'
     `)
     const rows = stmt.all() as any[]
-    return rows.map(row => ({ name: row.name, type: 'table' }))
+    return rows.map((row) => ({ name: row.name, type: 'table' }))
   } finally {
     db.close()
   }
@@ -32,7 +32,7 @@ export async function executeSqliteQuery(conn: DBConnection, query: string, valu
   try {
     const stmt = db.prepare(query)
     // better-sqlite3 returns column names in stmt.columns()
-    const fields = stmt.columns().map(c => ({ name: c.name }))
+    const fields = stmt.columns().map((c) => ({ name: c.name }))
     const rows = stmt.all(...values)
     return { rows, fields }
   } finally {
@@ -45,11 +45,11 @@ export async function fetchSqliteTableDetails(conn: DBConnection, tableName: str
   try {
     // 1. Get Primary Keys
     const info = db.prepare(`PRAGMA table_info('${tableName}')`).all() as any[]
-    const primaryKeys = info.filter(c => c.pk > 0).map(c => c.name)
+    const primaryKeys = info.filter((c) => c.pk > 0).map((c) => c.name)
 
     // 2. Get Foreign Keys
     const fks = db.prepare(`PRAGMA foreign_key_list('${tableName}')`).all() as any[]
-    const foreignKeys = fks.map(f => ({
+    const foreignKeys = fks.map((f) => ({
       column: f.from,
       referencedTable: f.table,
       referencedColumn: f.to
@@ -57,12 +57,12 @@ export async function fetchSqliteTableDetails(conn: DBConnection, tableName: str
 
     // 3. Dependent Tables (Scanning sqlite_master for other tables that reference this one)
     const allTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[]
-    const dependentTables: { table: string, column: string }[] = []
+    const dependentTables: { table: string; column: string }[] = []
 
     for (const t of allTables) {
       if (t.name === tableName) continue
       const otherFks = db.prepare(`PRAGMA foreign_key_list('${t.name}')`).all() as any[]
-      otherFks.forEach(f => {
+      otherFks.forEach((f) => {
         if (f.table === tableName) {
           dependentTables.push({ table: t.name, column: f.from })
         }
@@ -72,7 +72,12 @@ export async function fetchSqliteTableDetails(conn: DBConnection, tableName: str
     return {
       primaryKeys,
       foreignKeys,
-      dependentTables
+      dependentTables,
+      columns: info.map((c) => ({
+        name: c.name,
+        type: c.type,
+        nullable: c.notnull === 0
+      }))
     }
   } finally {
     db.close()
@@ -82,8 +87,12 @@ export async function fetchSqliteTableDetails(conn: DBConnection, tableName: str
 export async function insertSqliteRow(conn: DBConnection, tableName: string, row: any) {
   const db = new Database(conn.host || ':memory:')
   try {
-    const columns = Object.keys(row).map(c => `"${c}"`).join(', ')
-    const placeholders = Object.keys(row).map(() => '?').join(', ')
+    const columns = Object.keys(row)
+      .map((c) => `"${c}"`)
+      .join(', ')
+    const placeholders = Object.keys(row)
+      .map(() => '?')
+      .join(', ')
     const values = Object.values(row)
     const query = `INSERT INTO "${tableName}" (${columns}) VALUES (${placeholders})`
     db.prepare(query).run(values)
@@ -93,7 +102,13 @@ export async function insertSqliteRow(conn: DBConnection, tableName: string, row
   }
 }
 
-export async function updateSqliteRow(conn: DBConnection, tableName: string, pkKeys: string[], oldRow: any, newRow: any) {
+export async function updateSqliteRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  oldRow: any,
+  newRow: any
+) {
   const db = new Database(conn.host || ':memory:')
   try {
     const setParts: string[] = []
@@ -105,7 +120,7 @@ export async function updateSqliteRow(conn: DBConnection, tableName: string, pkK
     })
 
     const whereParts: string[] = []
-    pkKeys.forEach(pk => {
+    pkKeys.forEach((pk) => {
       whereParts.push(`"${pk}" = ?`)
       values.push(oldRow[pk])
     })
@@ -118,7 +133,13 @@ export async function updateSqliteRow(conn: DBConnection, tableName: string, pkK
   }
 }
 
-export async function deleteSqliteRow(conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade = false) {
+export async function deleteSqliteRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  row: any,
+  cascade = false
+) {
   const db = new Database(conn.host || ':memory:')
   try {
     if (cascade) {
@@ -133,7 +154,7 @@ export async function deleteSqliteRow(conn: DBConnection, tableName: string, pkK
     const whereParts: string[] = []
     const values: any[] = []
 
-    pkKeys.forEach(pk => {
+    pkKeys.forEach((pk) => {
       whereParts.push(`"${pk}" = ?`)
       values.push(row[pk])
     })

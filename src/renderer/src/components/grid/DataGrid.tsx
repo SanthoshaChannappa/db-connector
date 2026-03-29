@@ -1,8 +1,33 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../../store'
-import { useConnections, useQueryData, useTableDetails, useInsertRow, useUpdateRow, useDeleteRow } from '../../hooks/useDatabase'
+import {
+  useConnections,
+  useQueryData,
+  useTableDetails,
+  useInsertRow,
+  useUpdateRow,
+  useDeleteRow
+} from '../../hooks/useDatabase'
 import { ExportPanel } from './ExportPanel'
-import { Link as LinkIcon, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp, X, Search, RefreshCw, Terminal, Plus, Trash2, Edit2, Save, RotateCcw, FileDown } from 'lucide-react'
+import {
+  AlertCircle,
+  Link as LinkIcon,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Search,
+  RefreshCw,
+  Terminal,
+  Plus,
+  Trash2,
+  Edit2,
+  Save,
+  RotateCcw,
+  FileDown
+} from 'lucide-react'
 import * as ExcelJS from 'exceljs'
 
 import { generateQuery } from '../../lib/query-utility'
@@ -12,27 +37,28 @@ interface DataGridProps {
 }
 
 export function DataGrid({ gridId }: DataGridProps) {
-  const {
-    grids,
-    pushGrid,
-    removeGrid,
-    toggleGridCollapse,
-    updateGrid,
-    addQueryTab
-  } = useAppStore()
+  const { grids, pushGrid, removeGrid, toggleGridCollapse, updateGrid, addQueryTab } = useAppStore()
 
-  const grid = grids.find(g => g.id === gridId)
-  if (!grid) return null
-
-  const tabGrids = grids.filter(g => g.tabId === grid.tabId)
+  const grid = grids.find((g) => g.id === gridId)
+  const tabGrids = grid ? grids.filter((g) => g.tabId === grid.tabId) : []
   const isFirstInTab = tabGrids[0]?.id === gridId
 
-  const { tableName: activeTableName, connectionId, databaseName, filters, sortState, page, pageSize, isCollapsed } = grid
+  const {
+    tableName: activeTableName = '',
+    connectionId = '',
+    databaseName = null,
+    filters = [],
+    sortState = null,
+    page = 1,
+    pageSize = 10,
+    isCollapsed = false
+  } = grid || {}
 
   // Local state
   const [draftFilters, setDraftFilters] = useState<Record<string, string>>({})
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null)
   const [editingData, setEditingData] = useState<any>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
   const [isInserting, setIsInserting] = useState(false)
   const [newData, setNewData] = useState<any>({})
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -42,35 +68,100 @@ export function DataGrid({ gridId }: DataGridProps) {
   // Initialize draft filters from store
   useEffect(() => {
     const initialDrafts: Record<string, string> = {}
-    filters.forEach(f => {
+    filters.forEach((f) => {
       initialDrafts[f.column] = f.value
     })
     setDraftFilters(initialDrafts)
   }, [filters])
 
   const { data: connections } = useConnections()
-  const baseConn = connections?.find(c => c.id === connectionId) || null
+  const baseConn = connections?.find((c) => c.id === connectionId) || null
 
-  const conn = baseConn && databaseName
-    ? { ...baseConn, database: databaseName }
-    : baseConn
+  const conn = baseConn && databaseName ? { ...baseConn, database: databaseName } : baseConn
 
   const offset = (page - 1) * pageSize
 
   // Fetch Table Metadata (PKs, FKs, Dependent Tables)
   const { data: meta } = useTableDetails(conn, activeTableName)
 
-  const { query, countQuery } = generateQuery(conn, activeTableName, filters, sortState, page, pageSize)
+  const getInputType = (columnName: string) => {
+    const colMetaData = meta?.columns?.find((c) => c.name === columnName)
+    if (!colMetaData) return 'text'
 
-  const { data, isLoading, error, refetch: refetchData, isFetching: isFetchingData } = useQueryData(conn, query)
-  const { data: countData, refetch: refetchCount, isFetching: isFetchingCount } = useQueryData(conn, countQuery)
+    const type = colMetaData.type.toLowerCase()
+    if (
+      [
+        'int',
+        'integer',
+        'number',
+        'numeric',
+        'decimal',
+        'float',
+        'double',
+        'real',
+        'smallint',
+        'bigint'
+      ].some((t) => type.includes(t))
+    ) {
+      return 'number'
+    }
+    if (['date', 'time', 'timestamp', 'datetime'].some((t) => type.includes(t))) {
+      return 'datetime-local'
+    }
+    return 'text'
+  }
 
-  const totalRows = countData?.rows[0]?.total ?? (conn?.driver === 'mongodb' ? countData?.rows[0]?.count : 0) ?? 0
+  const isStringType = (columnName: string) => {
+    const colMetaData = meta?.columns?.find((c) => c.name === columnName)
+    if (!colMetaData) return true // Default to string/LIKE if unknown
+
+    const type = colMetaData.type.toLowerCase()
+    // Common string types across DBs
+    return [
+      'char',
+      'text',
+      'string',
+      'varchar',
+      'nvarchar',
+      'blob',
+      'clob',
+      'uuid',
+      'json',
+      'xml'
+    ].some((t) => type.includes(t))
+  }
+
+  const { query, countQuery } = generateQuery(
+    conn,
+    activeTableName,
+    filters,
+    sortState,
+    page,
+    pageSize
+  )
+
+  const {
+    data,
+    isLoading,
+    error,
+    refetch: refetchData,
+    isFetching: isFetchingData
+  } = useQueryData(conn, query)
+  const {
+    data: countData,
+    refetch: refetchCount,
+    isFetching: isFetchingCount
+  } = useQueryData(conn, countQuery)
+
+  const totalRows =
+    countData?.rows[0]?.total ?? (conn?.driver === 'mongodb' ? countData?.rows[0]?.count : 0) ?? 0
   const totalPages = Math.ceil(totalRows / pageSize)
 
   const insertMutation = useInsertRow()
   const updateMutation = useUpdateRow()
   const deleteMutation = useDeleteRow()
+
+  if (!grid) return null
 
   const handleRefresh = () => {
     refetchData()
@@ -82,14 +173,16 @@ export function DataGrid({ gridId }: DataGridProps) {
 
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet(activeTableName.substring(0, 31))
-    
-    sheet.columns = data.fields.map(f => ({ header: f.name, key: f.name, width: 20 }))
-    data.rows.forEach(row => {
+
+    sheet.columns = data.fields.map((f) => ({ header: f.name, key: f.name, width: 20 }))
+    data.rows.forEach((row) => {
       sheet.addRow(row)
     })
 
     const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -100,13 +193,12 @@ export function DataGrid({ gridId }: DataGridProps) {
 
   const isRefreshing = isFetchingData || isFetchingCount
 
-
   const handleApplyFilters = () => {
     const newFilters = Object.entries(draftFilters)
       .filter(([_, value]) => value.trim() !== '')
       .map(([column, value]) => ({
         column,
-        operator: 'LIKE',
+        operator: isStringType(column) ? 'LIKE' : '=',
         value: value.trim()
       }))
 
@@ -119,6 +211,32 @@ export function DataGrid({ gridId }: DataGridProps) {
     }
   }
 
+  const validateRow = (rowData: any) => {
+    if (!meta?.columns) return true
+
+    for (const col of meta.columns) {
+      const val = rowData[col.name]
+      const isPK = meta.primaryKeys.includes(col.name)
+
+      // 1. Check required fields (Primary Keys or Non-Nullable)
+      if ((isPK || !col.nullable) && (val === undefined || val === null || val === '')) {
+        setValidationError(`Field '${col.name}' is required.`)
+        return false
+      }
+
+      // 2. Basic type validation for numbers
+      if (getInputType(col.name) === 'number' && val !== undefined && val !== null && val !== '') {
+        if (isNaN(Number(val))) {
+          setValidationError(`Field '${col.name}' must be a valid number.`)
+          return false
+        }
+      }
+    }
+
+    setValidationError(null)
+    return true
+  }
+
   const handleFKClick = (targetTable: string, column: string, value: any) => {
     pushGrid(targetTable, { column, operator: '=', value: String(value) }, gridId)
   }
@@ -126,7 +244,11 @@ export function DataGrid({ gridId }: DataGridProps) {
   const handleDependentClick = (targetTable: string, columnName: string, row: any) => {
     const pkColumn = meta?.primaryKeys[0]
     if (pkColumn) {
-      pushGrid(targetTable, { column: columnName, operator: '=', value: String(row[pkColumn]) }, gridId)
+      pushGrid(
+        targetTable,
+        { column: columnName, operator: '=', value: String(row[pkColumn]) },
+        gridId
+      )
     }
   }
 
@@ -150,10 +272,13 @@ export function DataGrid({ gridId }: DataGridProps) {
   const handleCancelEdit = () => {
     setEditingRowIndex(null)
     setEditingData(null)
+    setValidationError(null)
   }
 
   const handleSaveUpdate = async () => {
     if (editingRowIndex === null || !editingData || !conn) return
+    if (!validateRow(editingData)) return
+
     const oldRow = data?.rows[editingRowIndex]
     if (!oldRow) return
 
@@ -196,6 +321,8 @@ export function DataGrid({ gridId }: DataGridProps) {
 
   const handleInsertRow = async () => {
     if (!conn) return
+    if (!validateRow(newData)) return
+
     try {
       await insertMutation.mutateAsync({
         conn,
@@ -204,6 +331,7 @@ export function DataGrid({ gridId }: DataGridProps) {
       })
       setIsInserting(false)
       setNewData({})
+      setValidationError(null)
     } catch (err) {
       alert(`Insert failed: ${(err as any).message}`)
     }
@@ -213,17 +341,19 @@ export function DataGrid({ gridId }: DataGridProps) {
   const setPageSize = (s: number) => updateGrid(gridId, { pageSize: s, page: 1 })
 
   return (
-    <div className={`flex flex-col rounded-lg border border-border bg-card shadow-sm transition-all duration-200`}>
+    <div
+      className={`flex flex-col rounded-lg border border-border bg-card shadow-sm transition-all duration-200`}
+    >
       {/* Header / Toolbar */}
       <div className="h-12 border-b border-border flex items-center justify-between px-4 shrink-0 bg-muted/30">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => toggleGridCollapse(gridId)}
             className="p-1 hover:bg-secondary rounded-md transition-colors text-muted-foreground"
           >
             {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
-          
+
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground select-none">
               {activeTableName}
@@ -239,18 +369,18 @@ export function DataGrid({ gridId }: DataGridProps) {
             )}
           </div>
         </div>
-        
+
         <div className="flex items-center gap-1.5">
           {!isCollapsed && data && (
             <>
-              <button 
-                onClick={() => addQueryTab(databaseName || '', query)}
+              <button
+                onClick={() => addQueryTab(connectionId, databaseName || '', query)}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground"
                 title="Open in Query Tab"
               >
                 <Terminal className="w-4 h-4" />
               </button>
-              <button 
+              <button
                 onClick={handleExportExcel}
                 disabled={!data || data.rows.length === 0}
                 className="p-1.5 hover:bg-green-600/10 hover:text-green-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground rounded-md transition-all text-muted-foreground group"
@@ -258,7 +388,7 @@ export function DataGrid({ gridId }: DataGridProps) {
               >
                 <FileDown className="w-4 h-4 group-hover:animate-bounce" />
               </button>
-              <button 
+              <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
                 className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground disabled:opacity-50"
@@ -266,7 +396,7 @@ export function DataGrid({ gridId }: DataGridProps) {
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               </button>
-              <button 
+              <button
                 onClick={() => setIsInserting(true)}
                 className="p-1.5 hover:bg-primary/20 hover:text-primary rounded-md transition-colors text-muted-foreground"
                 title="Add New Row"
@@ -279,7 +409,7 @@ export function DataGrid({ gridId }: DataGridProps) {
           )}
 
           {!isFirstInTab && (
-            <button 
+            <button
               onClick={() => removeGrid(gridId)}
               className="p-1.5 hover:bg-destructive/10 hover:text-destructive rounded-md transition-all text-muted-foreground/50 hover:opacity-100"
               title="Remove this view from stack"
@@ -290,7 +420,6 @@ export function DataGrid({ gridId }: DataGridProps) {
         </div>
       </div>
 
-
       {/* Delete Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -300,7 +429,10 @@ export function DataGrid({ gridId }: DataGridProps) {
                 <Trash2 className="w-5 h-5" />
                 Confirm Delete
               </h3>
-              <button onClick={() => setShowDeleteModal(false)} className="text-muted-foreground hover:text-foreground">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -308,7 +440,7 @@ export function DataGrid({ gridId }: DataGridProps) {
               <p className="text-sm text-foreground/80 mb-4">
                 Are you sure you want to delete this record? This action cannot be undone.
               </p>
-              
+
               {(meta?.dependentTables?.length ?? 0) > 0 && (
                 <div className="bg-secondary/50 border border-border rounded-lg p-4 mb-4">
                   <p className="text-xs font-medium mb-2 flex items-center gap-1.5 text-amber-500">
@@ -316,30 +448,33 @@ export function DataGrid({ gridId }: DataGridProps) {
                     Dependent Records Detected
                   </p>
                   <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
-                    This record is referenced by {meta?.dependentTables?.length} other tables. Regular delete may fail due to foreign key constraints.
+                    This record is referenced by {meta?.dependentTables?.length} other tables.
+                    Regular delete may fail due to foreign key constraints.
                   </p>
                   <label className="flex items-center gap-2 cursor-pointer group">
                     <div className="relative flex items-center">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={cascadeDelete}
                         onChange={(e) => setCascadeDelete(e.target.checked)}
                         className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
                       />
                     </div>
-                    <span className="text-xs font-semibold group-hover:text-foreground transition-colors">Cascade delete (remove related records)</span>
+                    <span className="text-xs font-semibold group-hover:text-foreground transition-colors">
+                      Cascade delete (remove related records)
+                    </span>
                   </label>
                 </div>
               )}
 
               <div className="flex items-center justify-end gap-3 mt-2">
-                <button 
+                <button
                   onClick={() => setShowDeleteModal(false)}
                   className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={confirmDelete}
                   className="px-4 py-2 text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-lg shadow-sm transition-all flex items-center gap-2"
                 >
@@ -355,8 +490,20 @@ export function DataGrid({ gridId }: DataGridProps) {
       {!isCollapsed && (
         <>
           <div className="p-4">
-            {isLoading && <div className="text-center text-sm text-muted-foreground py-10">Loading data...</div>}
-            {error && <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md border border-destructive/20">{(error as any)?.message || 'An error occurred'}</div>}
+            {isLoading && (
+              <div className="text-center text-sm text-muted-foreground py-10">Loading data...</div>
+            )}
+            {error && (
+              <div className="text-destructive text-sm bg-destructive/10 p-4 rounded-md border border-destructive/20">
+                {(error as any)?.message || 'An error occurred'}
+              </div>
+            )}
+            {validationError && (
+              <div className="mb-4 text-destructive text-xs bg-destructive/10 p-3 rounded-md border border-destructive/20 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                <AlertCircle className="w-4 h-4" />
+                {validationError}
+              </div>
+            )}
 
             {data && !isLoading && !error && (
               <div className="rounded-md border border-border overflow-x-auto bg-background">
@@ -366,19 +513,29 @@ export function DataGrid({ gridId }: DataGridProps) {
                       <th className="px-4 py-3 font-medium tracking-wider text-center border-r border-border sticky left-0 bg-muted/80 z-20">
                         <span className="sr-only">Actions</span>
                       </th>
-                      {data.fields.map(f => (
+                      {data.fields.map((f) => (
                         <th key={f.name} className="px-4 py-3 font-medium tracking-wider">
                           <div className="flex flex-col gap-2">
-                            <button 
+                            <button
                               onClick={() => handleSort(f.name)}
                               className="flex items-center gap-1.5 hover:text-foreground transition-colors group"
                             >
-                              <span className={sortState?.column === f.name ? 'text-primary font-bold' : ''}>{f.name}</span>
-                              <div className={`flex flex-col transition-opacity ${sortState?.column === f.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                              <span
+                                className={
+                                  sortState?.column === f.name ? 'text-primary font-bold' : ''
+                                }
+                              >
+                                {f.name}
+                              </span>
+                              <div
+                                className={`flex flex-col transition-opacity ${sortState?.column === f.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                              >
                                 {sortState?.column === f.name ? (
-                                  sortState.direction === 'asc' 
-                                    ? <ChevronUp className="w-3 h-3 text-primary" /> 
-                                    : <ChevronDown className="w-3 h-3 text-primary" />
+                                  sortState.direction === 'asc' ? (
+                                    <ChevronUp className="w-3 h-3 text-primary" />
+                                  ) : (
+                                    <ChevronDown className="w-3 h-3 text-primary" />
+                                  )
                                 ) : (
                                   <ChevronUp className="w-3 h-3 text-muted-foreground/30" />
                                 )}
@@ -390,7 +547,9 @@ export function DataGrid({ gridId }: DataGridProps) {
                                 placeholder="Filter..."
                                 className="w-full h-7 px-2 pl-7 pr-2 font-normal text-[10px] bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary transition-all"
                                 value={draftFilters[f.name] || ''}
-                                onChange={(e) => setDraftFilters(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                onChange={(e) =>
+                                  setDraftFilters((prev) => ({ ...prev, [f.name]: e.target.value }))
+                                }
                                 onKeyDown={handleKeyDown}
                               />
                               <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
@@ -399,7 +558,7 @@ export function DataGrid({ gridId }: DataGridProps) {
                         </th>
                       ))}
                       {(meta?.dependentTables?.length ?? 0) > 0 && (
-                        <th className="px-4 py-3 font-medium tracking-wider text-primary/80 border-l border-border bg-primary/5 sticky right-0 z-10 align-top">
+                        <th className="px-4 py-3 font-medium tracking-wider text-primary/80 border-l border-border bg-secondary sticky right-0 z-10 align-top">
                           Dependent Tables
                         </th>
                       )}
@@ -410,18 +569,26 @@ export function DataGrid({ gridId }: DataGridProps) {
                       <tr className="bg-primary/5 border-b border-border">
                         <td className="px-4 py-2 text-center border-r border-border sticky left-0 bg-background/80 z-20">
                           <div className="flex items-center gap-1 justify-center">
-                            <button onClick={handleInsertRow} className="p-1 text-green-500 hover:bg-green-500/10 rounded" title="Save">
+                            <button
+                              onClick={handleInsertRow}
+                              className="p-1 text-green-500 hover:bg-green-500/10 rounded"
+                              title="Save"
+                            >
                               <Save className="w-4 h-4" />
                             </button>
-                            <button onClick={() => setIsInserting(false)} className="p-1 text-red-500 hover:bg-red-500/10 rounded" title="Cancel">
+                            <button
+                              onClick={() => setIsInserting(false)}
+                              className="p-1 text-red-500 hover:bg-red-500/10 rounded"
+                              title="Cancel"
+                            >
                               <X className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
-                        {data.fields.map(f => (
+                        {data.fields.map((f) => (
                           <td key={f.name} className="px-2 py-1">
-                            <input 
-                              type="text"
+                            <input
+                              type={getInputType(f.name)}
                               className="w-full h-8 px-2 bg-background border border-border rounded focus:ring-1 focus:ring-primary text-xs"
                               placeholder={`New ${f.name}...`}
                               value={newData[f.name] || ''}
@@ -429,40 +596,56 @@ export function DataGrid({ gridId }: DataGridProps) {
                             />
                           </td>
                         ))}
-                        {(meta?.dependentTables?.length ?? 0) > 0 && <td className="sticky right-0 bg-background/80 z-10" />}
+                        {(meta?.dependentTables?.length ?? 0) > 0 && (
+                          <td className="sticky right-0 bg-secondary/80 z-10" />
+                        )}
                       </tr>
                     )}
                     {data.rows.length === 0 ? (
                       <tr>
-                        <td colSpan={data.fields.length + (meta?.dependentTables?.length ? 1 : 0) + 1} className="px-4 py-8 text-center text-muted-foreground text-xs italic">
+                        <td
+                          colSpan={data.fields.length + (meta?.dependentTables?.length ? 1 : 0) + 1}
+                          className="px-4 py-8 text-center text-muted-foreground text-xs italic"
+                        >
                           No records found match the criteria.
                         </td>
                       </tr>
                     ) : (
                       data.rows.map((row, i) => (
-                        <tr key={i} className={`border-b border-border transition-colors ${editingRowIndex === i ? 'bg-primary/5' : 'hover:bg-muted/20'}`}>
+                        <tr
+                          key={i}
+                          className={`border-b border-border transition-colors ${editingRowIndex === i ? 'bg-primary/5' : 'hover:bg-muted/20'}`}
+                        >
                           <td className="px-4 py-2.5 border-r border-border sticky left-0 bg-background/80 z-20">
                             <div className="flex items-center gap-1 justify-center">
                               {editingRowIndex === i ? (
                                 <>
-                                  <button onClick={handleSaveUpdate} className="p-1 text-green-500 hover:bg-green-500/10 rounded" title="Save">
+                                  <button
+                                    onClick={handleSaveUpdate}
+                                    className="p-1 text-green-500 hover:bg-green-500/10 rounded"
+                                    title="Save"
+                                  >
                                     <Save className="w-4 h-4" />
                                   </button>
-                                  <button onClick={handleCancelEdit} className="p-1 text-muted-foreground hover:bg-secondary rounded" title="Cancel">
+                                  <button
+                                    onClick={handleCancelEdit}
+                                    className="p-1 text-muted-foreground hover:bg-secondary rounded"
+                                    title="Cancel"
+                                  >
                                     <RotateCcw className="w-4 h-4" />
                                   </button>
                                 </>
                               ) : (
                                 <>
-                                  <button 
-                                    onClick={() => handleStartEdit(i, row)} 
+                                  <button
+                                    onClick={() => handleStartEdit(i, row)}
                                     className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
                                     title="Edit Row"
                                   >
                                     <Edit2 className="w-3.5 h-3.5" />
                                   </button>
-                                  <button 
-                                    onClick={() => handleDeleteRow(row)} 
+                                  <button
+                                    onClick={() => handleDeleteRow(row)}
                                     className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
                                     title="Delete Row"
                                   >
@@ -472,25 +655,38 @@ export function DataGrid({ gridId }: DataGridProps) {
                               )}
                             </div>
                           </td>
-                          {data.fields.map(f => {
-                            const fk = meta?.foreignKeys.find(k => k.column === f.name)
+                          {data.fields.map((f) => {
+                            const fk = meta?.foreignKeys.find((k) => k.column === f.name)
                             const isBeingEdited = editingRowIndex === i
                             const isPK = meta?.primaryKeys.includes(f.name)
-                            
+
                             return (
-                              <td key={f.name} className="px-4 py-2.5 max-w-[250px] truncate text-foreground/80">
+                              <td
+                                key={f.name}
+                                className="px-4 py-2.5 max-w-[250px] truncate text-foreground/80"
+                              >
                                 {isBeingEdited && !isPK ? (
-                                  <input 
-                                    type="text"
+                                  <input
+                                    type={getInputType(f.name)}
                                     className="w-full h-8 px-2 bg-background border border-primary/30 rounded focus:ring-1 focus:ring-primary text-xs"
                                     value={editingData[f.name] ?? ''}
-                                    onChange={(e) => setEditingData({ ...editingData, [f.name]: e.target.value })}
+                                    onChange={(e) =>
+                                      setEditingData({ ...editingData, [f.name]: e.target.value })
+                                    }
                                   />
                                 ) : (
-                                  <div className={`flex items-center gap-2 ${isBeingEdited && isPK ? 'opacity-50 select-none' : ''}`}>
+                                  <div
+                                    className={`flex items-center gap-2 ${isBeingEdited && isPK ? 'opacity-50 select-none' : ''}`}
+                                  >
                                     {fk && row[f.name] ? (
                                       <button
-                                        onClick={() => handleFKClick(fk.referencedTable, fk.referencedColumn, row[f.name])}
+                                        onClick={() =>
+                                          handleFKClick(
+                                            fk.referencedTable,
+                                            fk.referencedColumn,
+                                            row[f.name]
+                                          )
+                                        }
                                         className="text-blue-500 hover:text-blue-400 hover:underline inline-flex items-center gap-1"
                                         title={`Navigate to ${fk.referencedTable}.${fk.referencedColumn}`}
                                       >
@@ -501,7 +697,9 @@ export function DataGrid({ gridId }: DataGridProps) {
                                       String(row[f.name] ?? 'NULL')
                                     )}
                                     {isBeingEdited && isPK && (
-                                      <span className="text-[10px] bg-muted px-1 rounded border border-border">PK</span>
+                                      <span className="text-[10px] bg-muted px-1 rounded border border-border">
+                                        PK
+                                      </span>
                                     )}
                                   </div>
                                 )}
@@ -509,18 +707,22 @@ export function DataGrid({ gridId }: DataGridProps) {
                             )
                           })}
                           {(meta?.dependentTables?.length ?? 0) > 0 && (
-                            <td className="px-4 py-2.5 border-l border-border bg-primary/5 sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">
+                            <td className="px-4 py-2.5 border-l border-border bg-secondary sticky right-0 z-10 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">
                               <div className="flex flex-wrap gap-2">
-                                {((meta?.dependentTables as any[]) || []).map((dep: any, idx: number) => (
-                                  <button
-                                    key={idx}
-                                    onClick={() => handleDependentClick(dep.table, dep.column, row)}
-                                    className="text-[10px] bg-background border border-border rounded px-1.5 py-0.5 hover:border-primary hover:text-primary transition-colors flex items-center gap-1"
-                                  >
-                                    {dep.table}
-                                    <ExternalLink className="w-2.5 h-2.5" />
-                                  </button>
-                                ))}
+                                {((meta?.dependentTables as any[]) || []).map(
+                                  (dep: any, idx: number) => (
+                                    <button
+                                      key={idx}
+                                      onClick={() =>
+                                        handleDependentClick(dep.table, dep.column, row)
+                                      }
+                                      className="text-[10px] bg-background border border-border rounded px-1.5 py-0.5 hover:border-primary hover:text-primary transition-colors flex items-center gap-1"
+                                    >
+                                      {dep.table}
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                    </button>
+                                  )
+                                )}
                               </div>
                             </td>
                           )}
@@ -546,7 +748,9 @@ export function DataGrid({ gridId }: DataGridProps) {
                 <option value={100}>100 per page</option>
               </select>
               <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">
-                Showing {Math.min(offset + 1, totalRows).toLocaleString()} - {Math.min(offset + pageSize, totalRows).toLocaleString()} of {totalRows.toLocaleString()}
+                Showing {Math.min(offset + 1, totalRows).toLocaleString()} -{' '}
+                {Math.min(offset + pageSize, totalRows).toLocaleString()} of{' '}
+                {totalRows.toLocaleString()}
               </span>
             </div>
 

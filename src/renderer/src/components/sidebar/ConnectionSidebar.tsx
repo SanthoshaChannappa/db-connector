@@ -1,14 +1,31 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Plus, Database, ChevronRight, ChevronDown, Table2,
-  Edit2, Trash2, Search, Folder, FolderOpen, FolderPlus,
-  DatabaseZap, Terminal
+  Plus,
+  Database,
+  ChevronRight,
+  ChevronDown,
+  Table2,
+  Edit2,
+  Trash2,
+  Search,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  DatabaseZap,
+  Terminal,
+  RefreshCw,
+  LogOut
 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import type { DBConnection, ConnectionFolder } from '../../store'
 import {
-  useConnections, useDatabases, useSchema, useDeleteConnection,
-  useFolders, useSaveFolder, useDeleteFolder
+  useConnections,
+  useDatabases,
+  useSchema,
+  useDeleteConnection,
+  useFolders,
+  useSaveFolder,
+  useDeleteFolder
 } from '../../hooks/useDatabase'
 import { ConnectionDialog } from './ConnectionDialog'
 
@@ -42,11 +59,11 @@ function FolderDialog({
   if (existingFolder) {
     const collect = (id: string) => {
       selfAndDescendants.add(id)
-      folders.filter(f => f.parentId === id).forEach(f => collect(f.id))
+      folders.filter((f) => f.parentId === id).forEach((f) => collect(f.id))
     }
     collect(existingFolder.id)
   }
-  const parentOptions = folders.filter(f => !selfAndDescendants.has(f.id))
+  const parentOptions = folders.filter((f) => !selfAndDescendants.has(f.id))
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -58,8 +75,8 @@ function FolderDialog({
             autoFocus
             className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
             value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSave()}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
             placeholder="My Folder"
           />
         </label>
@@ -68,17 +85,29 @@ function FolderDialog({
           <select
             className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
             value={parentId}
-            onChange={e => setParentId(e.target.value)}
+            onChange={(e) => setParentId(e.target.value)}
           >
             <option value="">— Root —</option>
-            {parentOptions.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
+            {parentOptions.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
             ))}
           </select>
         </label>
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
-          <button onClick={onClose} className="px-4 py-2 rounded-md hover:bg-secondary text-sm font-medium transition-colors">Cancel</button>
-          <button onClick={handleSave} className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium transition-colors">Save</button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-md hover:bg-secondary text-sm font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium transition-colors"
+          >
+            Save
+          </button>
         </div>
       </div>
     </div>
@@ -103,8 +132,8 @@ function DatabaseItem({
   activeDatabaseName: string | null
   activeTableName: string | null
   onSelectDatabase: (dbName: string) => void
-  onSelectTable: (tableName: string) => void
-  onOpenQuery: (dbName: string) => void
+  onSelectTable: (connectionId: string, databaseName: string, tableName: string) => void
+  onOpenQuery: (connectionId: string, dbName: string) => void
 }) {
   const [tableSearch, setTableSearch] = useState('')
   const [expanded, setExpanded] = useState(false)
@@ -116,29 +145,37 @@ function DatabaseItem({
   const isActiveDb = isActiveConn && activeDatabaseName === dbName
 
   const handleToggle = () => {
-    setExpanded(e => !e)
+    setExpanded((e) => !e)
     onSelectDatabase(dbName)
   }
 
   const filteredSchema = tableSearch.trim()
-    ? schema?.filter(item => item.name.toLowerCase().includes(tableSearch.toLowerCase()))
+    ? schema?.filter((item) => item.name.toLowerCase().includes(tableSearch.toLowerCase()))
     : schema
 
   return (
     <div className="flex flex-col group/db">
-      <div className={`flex items-center gap-1.5 px-2 py-1 text-sm rounded-md w-full transition-colors ${
-        isActiveDb && !expanded ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
-      }`}>
+      <div
+        className={`flex items-center gap-1.5 px-2 py-1 text-sm rounded-md w-full transition-colors ${
+          isActiveDb && !expanded
+            ? 'bg-primary/10 text-primary font-medium'
+            : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
+        }`}
+      >
         <button className="flex items-center gap-1.5 flex-1 min-w-0" onClick={handleToggle}>
-          {expanded
-            ? <ChevronDown className="w-3.5 h-3.5 shrink-0" />
-            : <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-          }
+          {expanded ? (
+            <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+          )}
           <DatabaseZap className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
           <span className="truncate">{dbName}</span>
         </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onOpenQuery(dbName) }}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenQuery(conn.id, dbName)
+          }}
           className="p-1 hover:bg-primary/20 hover:text-primary rounded-md opacity-0 group-hover/db:opacity-100 transition-opacity"
           title="Open Query Tab"
         >
@@ -152,8 +189,8 @@ function DatabaseItem({
             <div className="px-1 py-1 sticky top-0 bg-card z-10 mb-1">
               <div className="relative">
                 <Search className="w-2.5 h-2.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Filter tables..."
                   className="w-full h-6 pl-6 pr-2 text-[10px] bg-secondary/50 border border-border rounded-md focus:outline-none focus:border-primary/50"
                   value={tableSearch}
@@ -162,11 +199,16 @@ function DatabaseItem({
               </div>
             </div>
           )}
-          {isLoading && <span className="text-xs text-muted-foreground py-1 px-1">Loading tables...</span>}
-          {filteredSchema?.map(item => (
+          {isLoading && (
+            <span className="text-xs text-muted-foreground py-1 px-1">Loading tables...</span>
+          )}
+          {filteredSchema?.map((item) => (
             <button
               key={item.name}
-              onClick={() => { onSelectDatabase(dbName); onSelectTable(item.name) }}
+              onClick={() => {
+                onSelectDatabase(dbName)
+                onSelectTable(conn.id, dbName, item.name)
+              }}
               className={`flex items-center gap-2 px-2 py-1 text-xs rounded-md w-full transition-colors ${
                 isActiveDb && activeTableName === item.name
                   ? 'bg-primary text-primary-foreground font-medium'
@@ -207,39 +249,87 @@ function ConnectionItem({
   activeTableName: string | null
   onSelectConnection: (id: string) => void
   onSelectDatabase: (dbName: string) => void
-  onSelectTable: (tableName: string) => void
+  onSelectTable: (connectionId: string, databaseName: string, tableName: string) => void
   onEdit: () => void
   onDelete: () => void
 }) {
-  const { addQueryTab } = useAppStore()
+  const { addQueryTab, setActiveConnectionId } = useAppStore()
   const [expanded, setExpanded] = useState(false)
-  const { data: databases, isLoading } = useDatabases(expanded ? conn : null)
+  const { data: databases, isLoading, refetch } = useDatabases(expanded ? conn : null)
   const isActive = activeConnectionId === conn.id
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setExpanded(x => !x)
+    setExpanded((x) => !x)
     onSelectConnection(conn.id)
+  }
+
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    refetch()
+  }
+
+  const handleDisconnect = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpanded(false)
+    if (isActive) {
+      setActiveConnectionId(null)
+    }
   }
 
   return (
     <div className="flex flex-col group">
-      <div className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md w-full transition-colors ${
-        isActive && !expanded ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-secondary'
-      }`}>
+      <div
+        className={`flex items-center justify-between px-2 py-1.5 text-sm rounded-md w-full transition-colors ${
+          isActive && !expanded ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-secondary'
+        }`}
+      >
         <button onClick={handleToggle} className="flex items-center gap-1.5 flex-1 min-w-0">
-          {expanded
-            ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
-            : <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
-          }
+          {expanded ? (
+            <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+          )}
           <Database className="w-4 h-4 shrink-0 text-blue-500" />
           <span className="truncate font-medium">{conn.name}</span>
         </button>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={e => { e.stopPropagation(); onEdit() }} className="p-1 hover:text-primary rounded-md">
+          {expanded && (
+            <button
+              onClick={handleRefresh}
+              className={`p-1 hover:text-primary rounded-md ${isLoading ? 'animate-spin text-primary' : ''}`}
+              title="Refresh Databases"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {expanded && (
+            <button
+              onClick={handleDisconnect}
+              className="p-1 hover:text-primary rounded-md"
+              title="Disconnect"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="p-1 hover:text-primary rounded-md"
+            title="Edit Connection"
+          >
             <Edit2 className="w-3.5 h-3.5" />
           </button>
-          <button onClick={e => { e.stopPropagation(); onDelete() }} className="p-1 hover:text-destructive rounded-md">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            className="p-1 hover:text-destructive rounded-md"
+            title="Delete Connection"
+          >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -247,8 +337,10 @@ function ConnectionItem({
 
       {expanded && (
         <div className="ml-6 flex flex-col gap-0.5 mt-1 border-l border-border pl-2">
-          {isLoading && <span className="text-xs text-muted-foreground py-1 px-1">Loading databases...</span>}
-          {databases?.map(db => (
+          {isLoading && (
+            <span className="text-xs text-muted-foreground py-1 px-1">Loading databases...</span>
+          )}
+          {databases?.map((db) => (
             <DatabaseItem
               key={db.name}
               dbName={db.name}
@@ -258,7 +350,7 @@ function ConnectionItem({
               activeTableName={activeTableName}
               onSelectDatabase={onSelectDatabase}
               onSelectTable={onSelectTable}
-              onOpenQuery={(dbName) => addQueryTab(dbName)}
+              onOpenQuery={(connId, dbName) => addQueryTab(connId, dbName)}
             />
           ))}
           {databases?.length === 0 && (
@@ -295,40 +387,65 @@ function FolderItem({
   activeTableName: string | null
   onSelectConnection: (id: string) => void
   onSelectDatabase: (dbName: string) => void
-  onSelectTable: (tableName: string) => void
+  onSelectTable: (connectionId: string, databaseName: string, tableName: string) => void
   onEditConnection: (conn: DBConnection) => void
   onDeleteConnection: (conn: DBConnection) => void
   onEditFolder: (folder: ConnectionFolder) => void
   onDeleteFolder: (folder: ConnectionFolder) => void
 }) {
   const [expanded, setExpanded] = useState(true)
-  const childFolders = allFolders.filter(f => f.parentId === folder.id)
-  const folderConnections = connections.filter(c => c.folderId === folder.id)
+  const childFolders = allFolders.filter((f) => f.parentId === folder.id)
+  const folderConnections = connections.filter((c) => c.folderId === folder.id)
   const hasChildren = childFolders.length > 0 || folderConnections.length > 0
 
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-2 py-1.5 text-sm rounded-md w-full transition-colors hover:bg-secondary group">
-        <button className="flex items-center gap-1.5 flex-1 min-w-0" onClick={() => setExpanded(e => !e)}>
-          {hasChildren
-            ? expanded ? <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
-            : <span className="w-4 h-4 shrink-0" />
-          }
-          {expanded
-            ? <FolderOpen className="w-4 h-4 shrink-0 text-amber-400" />
-            : <Folder className="w-4 h-4 shrink-0 text-amber-400" />
-          }
+        <button
+          className="flex items-center gap-1.5 flex-1 min-w-0"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          {hasChildren ? (
+            expanded ? (
+              <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+            )
+          ) : (
+            <span className="w-4 h-4 shrink-0" />
+          )}
+          {expanded ? (
+            <FolderOpen className="w-4 h-4 shrink-0 text-amber-400" />
+          ) : (
+            <Folder className="w-4 h-4 shrink-0 text-amber-400" />
+          )}
           <span className="truncate font-medium text-foreground">{folder.name}</span>
         </button>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={e => { e.stopPropagation(); onEditFolder(folder) }} className="p-1 hover:text-primary rounded-md"><Edit2 className="w-3.5 h-3.5" /></button>
-          <button onClick={e => { e.stopPropagation(); onDeleteFolder(folder) }} className="p-1 hover:text-destructive rounded-md"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditFolder(folder)
+            }}
+            className="p-1 hover:text-primary rounded-md"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDeleteFolder(folder)
+            }}
+            className="p-1 hover:text-destructive rounded-md"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
       {expanded && (
         <div className="ml-2 border-l border-border pl-1 flex flex-col gap-0.5 mt-0.5">
-          {childFolders.map(child => (
+          {childFolders.map((child) => (
             <FolderItem
               key={child.id}
               folder={child}
@@ -346,7 +463,7 @@ function FolderItem({
               onDeleteFolder={onDeleteFolder}
             />
           ))}
-          {folderConnections.map(conn => (
+          {folderConnections.map((conn) => (
             <ConnectionItem
               key={conn.id}
               conn={conn}
@@ -360,7 +477,9 @@ function FolderItem({
               onDelete={() => onDeleteConnection(conn)}
             />
           ))}
-          {!hasChildren && <span className="text-xs text-muted-foreground px-2 py-1">Empty folder</span>}
+          {!hasChildren && (
+            <span className="text-xs text-muted-foreground px-2 py-1">Empty folder</span>
+          )}
         </div>
       )}
     </div>
@@ -371,11 +490,15 @@ function FolderItem({
 
 export function ConnectionSidebar() {
   const {
-    activeConnectionId, setActiveConnectionId,
-    activeDatabaseName, setActiveDatabaseName,
-    grids, activeTabId, addTab
+    activeConnectionId,
+    setActiveConnectionId,
+    activeDatabaseName,
+    setActiveDatabaseName,
+    grids,
+    activeTabId,
+    addTab
   } = useAppStore()
-  const activeGrid = grids.find(g => g.tabId === activeTabId)
+  const activeGrid = grids.find((g) => g.tabId === activeTabId)
   const activeTableName = activeGrid?.tableName || null
 
   const [isConnDialogOpen, setIsConnDialogOpen] = useState(false)
@@ -383,6 +506,12 @@ export function ConnectionSidebar() {
   const [editingConnection, setEditingConnection] = useState<DBConnection | undefined>()
   const [editingFolder, setEditingFolder] = useState<ConnectionFolder | undefined>()
   const [searchQuery, setSearchQuery] = useState('')
+  const [appVersion, setAppVersion] = useState<string>('')
+
+  useEffect(() => {
+    // @ts-ignore
+    window.api?.getAppVersion().then(setAppVersion)
+  }, [])
 
   // Resizable sidebar logic
   const [isResizing, setIsResizing] = useState(false)
@@ -399,15 +528,18 @@ export function ConnectionSidebar() {
     setIsResizing(false)
   }, [])
 
-  const resize = useCallback((mouseMoveEvent: MouseEvent) => {
-    if (isResizing) {
-      const newWidth = mouseMoveEvent.clientX
-      if (newWidth >= 160 && newWidth <= 600) {
-        setSidebarWidth(newWidth)
-        localStorage.setItem('sidebarWidth', newWidth.toString())
+  const resize = useCallback(
+    (mouseMoveEvent: MouseEvent) => {
+      if (isResizing) {
+        const newWidth = mouseMoveEvent.clientX
+        if (newWidth >= 160 && newWidth <= 600) {
+          setSidebarWidth(newWidth)
+          localStorage.setItem('sidebarWidth', newWidth.toString())
+        }
       }
-    }
-  }, [isResizing])
+    },
+    [isResizing]
+  )
 
   useEffect(() => {
     if (isResizing) {
@@ -447,8 +579,8 @@ export function ConnectionSidebar() {
     setActiveDatabaseName(dbName)
   }
 
-  const handleSelectTable = (tableName: string) => {
-    addTab(tableName)
+  const handleSelectTable = (connectionId: string, databaseName: string, tableName: string) => {
+    addTab(connectionId, databaseName, tableName)
   }
 
   const handleEditFolder = (folder: ConnectionFolder) => {
@@ -474,11 +606,11 @@ export function ConnectionSidebar() {
 
   const isSearching = searchQuery.trim().length > 0
   const filteredConnections = isSearching
-    ? connections.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? connections.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : connections
 
-  const rootFolders = folders.filter(f => !f.parentId)
-  const rootConnections = connections.filter(c => !c.folderId)
+  const rootFolders = folders.filter((f) => !f.parentId)
+  const rootConnections = connections.filter((c) => !c.folderId)
 
   return (
     <aside
@@ -496,11 +628,26 @@ export function ConnectionSidebar() {
       <div className="h-14 border-b border-border flex items-center justify-between px-4 shrink-0">
         <h2 className="font-semibold text-sm">Connections</h2>
         <div className="flex items-center gap-1">
-          <button onClick={() => setIsFolderDialogOpen(true)} title="New Folder" className="p-1 hover:bg-secondary rounded-md transition-colors">
+          <button
+            onClick={() => setIsFolderDialogOpen(true)}
+            title="New Folder"
+            className="p-1 hover:bg-secondary rounded-md transition-colors"
+          >
             <FolderPlus className="w-4 h-4" />
           </button>
-          <button onClick={() => setIsConnDialogOpen(true)} title="New Connection" className="p-1 hover:bg-secondary rounded-md transition-colors">
+          <button
+            onClick={() => setIsConnDialogOpen(true)}
+            title="New Connection"
+            className="p-1 hover:bg-secondary rounded-md transition-colors"
+          >
             <Plus className="w-4 h-4" />
+          </button>
+          <button
+            onClick={useAppStore.getState().toggleLogViewer}
+            title="View Logs"
+            className="p-1 hover:bg-secondary rounded-md transition-colors"
+          >
+            <Terminal className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -513,7 +660,7 @@ export function ConnectionSidebar() {
             type="text"
             placeholder="Search connections..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full h-8 pl-8 pr-3 text-sm bg-secondary/50 border border-border rounded-md focus:outline-none focus:border-primary/50 transition-colors"
           />
         </div>
@@ -523,10 +670,12 @@ export function ConnectionSidebar() {
       <div className="flex-1 overflow-y-auto p-2">
         {isSearching ? (
           filteredConnections.length === 0 ? (
-            <div className="text-center text-xs text-muted-foreground mt-10">No matching connections.</div>
+            <div className="text-center text-xs text-muted-foreground mt-10">
+              No matching connections.
+            </div>
           ) : (
             <div className="flex flex-col gap-1">
-              {filteredConnections.map(conn => (
+              {filteredConnections.map((conn) => (
                 <ConnectionItem
                   key={conn.id}
                   conn={conn}
@@ -542,54 +691,72 @@ export function ConnectionSidebar() {
               ))}
             </div>
           )
+        ) : rootFolders.length === 0 && rootConnections.length === 0 ? (
+          <div className="text-center text-xs text-muted-foreground mt-10">
+            No connections found.
+          </div>
         ) : (
-          rootFolders.length === 0 && rootConnections.length === 0 ? (
-            <div className="text-center text-xs text-muted-foreground mt-10">No connections found.</div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {rootFolders.map(folder => (
-                <FolderItem
-                  key={folder.id}
-                  folder={folder}
-                  allFolders={folders}
-                  connections={connections}
-                  activeConnectionId={activeConnectionId}
-                  activeDatabaseName={activeDatabaseName}
-                  activeTableName={activeTableName}
-                  onSelectConnection={setActiveConnectionId}
-                  onSelectDatabase={handleSelectDatabase}
-                  onSelectTable={handleSelectTable}
-                  onEditConnection={handleEditConn}
-                  onDeleteConnection={handleDeleteConn}
-                  onEditFolder={handleEditFolder}
-                  onDeleteFolder={handleDeleteFolder}
-                />
-              ))}
-              {rootConnections.map(conn => (
-                <ConnectionItem
-                  key={conn.id}
-                  conn={conn}
-                  activeConnectionId={activeConnectionId}
-                  activeDatabaseName={activeDatabaseName}
-                  activeTableName={activeTableName}
-                  onSelectConnection={setActiveConnectionId}
-                  onSelectDatabase={handleSelectDatabase}
-                  onSelectTable={handleSelectTable}
-                  onEdit={() => handleEditConn(conn)}
-                  onDelete={() => handleDeleteConn(conn)}
-                />
-              ))}
-            </div>
-          )
+          <div className="flex flex-col gap-1">
+            {rootFolders.map((folder) => (
+              <FolderItem
+                key={folder.id}
+                folder={folder}
+                allFolders={folders}
+                connections={connections}
+                activeConnectionId={activeConnectionId}
+                activeDatabaseName={activeDatabaseName}
+                activeTableName={activeTableName}
+                onSelectConnection={setActiveConnectionId}
+                onSelectDatabase={handleSelectDatabase}
+                onSelectTable={handleSelectTable}
+                onEditConnection={handleEditConn}
+                onDeleteConnection={handleDeleteConn}
+                onEditFolder={handleEditFolder}
+                onDeleteFolder={handleDeleteFolder}
+              />
+            ))}
+            {rootConnections.map((conn) => (
+              <ConnectionItem
+                key={conn.id}
+                conn={conn}
+                activeConnectionId={activeConnectionId}
+                activeDatabaseName={activeDatabaseName}
+                activeTableName={activeTableName}
+                onSelectConnection={setActiveConnectionId}
+                onSelectDatabase={handleSelectDatabase}
+                onSelectTable={handleSelectTable}
+                onEdit={() => handleEditConn(conn)}
+                onDelete={() => handleDeleteConn(conn)}
+              />
+            ))}
+          </div>
         )}
       </div>
 
       {isConnDialogOpen && (
-        <ConnectionDialog onClose={handleCloseConnDialog} existingConnection={editingConnection} folders={folders} />
+        <ConnectionDialog
+          onClose={handleCloseConnDialog}
+          existingConnection={editingConnection}
+          folders={folders}
+        />
       )}
       {isFolderDialogOpen && (
-        <FolderDialog folders={folders} existingFolder={editingFolder} onClose={handleCloseFolderDialog} />
+        <FolderDialog
+          folders={folders}
+          existingFolder={editingFolder}
+          onClose={handleCloseFolderDialog}
+        />
       )}
+
+      {/* Footer / Version */}
+      <div className="px-4 py-2 border-t border-border bg-muted/10 shrink-0 flex items-center justify-between">
+        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight opacity-50">
+          Ready to Connect
+        </span>
+        <span className="text-[10px] text-muted-foreground font-bold font-mono px-1.5 py-0.5 rounded-sm bg-muted/40">
+          v{appVersion}
+        </span>
+      </div>
     </aside>
   )
 }

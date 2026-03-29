@@ -8,20 +8,21 @@ import { useConnections } from './hooks/useDatabase'
 import { generateQuery } from './lib/query-utility'
 import * as ExcelJS from 'exceljs'
 import { Table, X, Edit2, FileDown, PanelLeft, Terminal } from 'lucide-react'
+import { LogViewer } from './components/log/LogViewer'
 
 const queryClient = new QueryClient()
 
-function EditableTab({ 
-  tab, 
-  isActive, 
-  onSelect, 
-  onClose, 
-  onRename 
-}: { 
-  tab: any, 
-  isActive: boolean, 
-  onSelect: () => void, 
-  onClose: (id: string) => void,
+function EditableTab({
+  tab,
+  isActive,
+  onSelect,
+  onClose,
+  onRename
+}: {
+  tab: any
+  isActive: boolean
+  onSelect: () => void
+  onClose: (id: string) => void
   onRename: (id: string, title: string) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
@@ -46,28 +47,36 @@ function EditableTab({
   }
 
   return (
-    <div 
+    <div
       onClick={onSelect}
       className={`group relative flex items-center h-10 px-4 min-w-[120px] max-w-[200px] border-r border-border cursor-pointer transition-all ${
-        isActive 
-          ? 'bg-background text-primary font-medium border-t-2 border-t-primary shadow-[0_-4px_10px_rgba(0,0,0,0.05)]' 
+        isActive
+          ? 'bg-background text-primary font-medium border-t-2 border-t-primary shadow-[0_-4px_10px_rgba(0,0,0,0.05)]'
           : 'bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
       }`}
     >
       <div className="flex items-center gap-2 overflow-hidden w-full">
         {tab.type === 'query' ? (
-          <Terminal className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`} />
+          <Terminal
+            className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`}
+          />
         ) : (
-          <Table className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`} />
+          <Table
+            className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground/50'}`}
+          />
         )}
-        
+
         {isEditing ? (
-          <form onSubmit={handleRename} className="flex-1 min-w-0" onClick={e => e.stopPropagation()}>
+          <form
+            onSubmit={handleRename}
+            className="flex-1 min-w-0"
+            onClick={(e) => e.stopPropagation()}
+          >
             <input
               ref={inputRef}
               className="w-full bg-transparent border-none outline-none text-xs text-foreground py-0"
               value={tempTitle}
-              onChange={e => setTempTitle(e.target.value)}
+              onChange={(e) => setTempTitle(e.target.value)}
               onBlur={() => handleRename()}
             />
           </form>
@@ -78,23 +87,29 @@ function EditableTab({
 
       <div className="flex items-center gap-1.5 ml-2">
         {!isEditing && (
-          <button 
-            onClick={(e) => { e.stopPropagation(); setIsEditing(true) }}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsEditing(true)
+            }}
             className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-secondary rounded transition-all ${isActive ? 'text-primary/70' : 'text-muted-foreground/70'}`}
             title="Rename Tab"
           >
             <Edit2 className="w-3 h-3" />
           </button>
         )}
-        <button 
-          onClick={(e) => { e.stopPropagation(); onClose(tab.id) }}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose(tab.id)
+          }}
           className={`opacity-0 group-hover:opacity-100 p-0.5 hover:bg-destructive/10 hover:text-destructive rounded transition-all ${isActive ? 'text-primary/70' : 'text-muted-foreground/70'}`}
           title="Close Tab"
         >
           <X className="w-3 h-3" />
         </button>
       </div>
-      
+
       {isActive && (
         <div className="absolute bottom-[-1px] left-0 right-0 h-[1px] bg-background z-10" />
       )}
@@ -103,35 +118,97 @@ function EditableTab({
 }
 
 function AppContent() {
-  const { 
-    tabs, 
-    activeTabId, 
-    setActiveTabId, 
-    removeTab, 
-    renameTab, 
-    grids, 
-    sidebarOpen, 
-    toggleSidebar 
+  const {
+    tabs,
+    activeTabId,
+    setActiveTabId,
+    removeTab,
+    renameTab,
+    grids,
+    sidebarOpen,
+    toggleSidebar,
+    addLog,
+    toggleLogViewer
   } = useAppStore()
+
+  // Setup main process log listener
+  useEffect(() => {
+    // @ts-ignore (exposed via preload)
+    if (window.api?.onMainLog) {
+      // @ts-ignore
+      window.api.onMainLog((log: any) => {
+        addLog({ ...log, source: 'main' })
+      })
+    }
+
+    // Capture renderer logs
+    const originalLog = console.log
+    const originalInfo = console.info
+    const originalWarn = console.warn
+    const originalError = console.error
+
+    const captureLog = (level: 'log' | 'info' | 'warn' | 'error', ...args: any[]) => {
+      const message = args
+        .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+        .join(' ')
+
+      addLog({
+        timestamp: new Date().toISOString(),
+        source: 'renderer',
+        level: level === 'info' ? 'log' : level, // Normalize level
+        message
+      })
+    }
+
+    console.log = (...args) => {
+      originalLog(...args)
+      captureLog('log', ...args)
+    }
+    console.info = (...args) => {
+      originalInfo(...args)
+      captureLog('info', ...args)
+    }
+    console.warn = (...args) => {
+      originalWarn(...args)
+      captureLog('warn', ...args)
+    }
+    console.error = (...args) => {
+      originalError(...args)
+      captureLog('error', ...args)
+    }
+
+    return () => {
+      console.log = originalLog
+      console.info = originalInfo
+      console.warn = originalWarn
+      console.error = originalError
+    }
+  }, [addLog])
   const { data: allConnections } = useConnections()
   const qClient = useQueryClient()
 
   const handleExportTabExcel = async (tabId: string) => {
-    const tabGrids = grids.filter(g => g.tabId === tabId)
+    const tabGrids = grids.filter((g) => g.tabId === tabId)
     if (tabGrids.length === 0) return
 
     const workbook = new ExcelJS.Workbook()
-    const activeTab = tabs.find(t => t.id === tabId)
+    const activeTab = tabs.find((t) => t.id === tabId)
     const exportName = activeTab?.title || 'Export'
 
     for (const grid of tabGrids) {
-      const baseConn = allConnections?.find(c => c.id === grid.connectionId) || null
-      const conn = baseConn && grid.databaseName
-        ? { ...baseConn, database: grid.databaseName }
-        : baseConn
+      const baseConn = allConnections?.find((c) => c.id === grid.connectionId) || null
+      const conn =
+        baseConn && grid.databaseName ? { ...baseConn, database: grid.databaseName } : baseConn
 
-      const { query } = generateQuery(conn, grid.tableName, grid.filters, grid.sortState, grid.page, grid.pageSize)
-      
+      const { query } = generateQuery(
+        conn,
+        grid.tableName,
+        grid.filters,
+        grid.sortState,
+        grid.page,
+        grid.pageSize
+      )
+
       const queryKey = ['query', conn?.id, query, undefined]
       const cachedData = qClient.getQueryData<{ rows: any[]; fields: { name: string }[] }>(queryKey)
 
@@ -142,10 +219,10 @@ function AppContent() {
         while (workbook.getWorksheet(sheetName)) {
           sheetName = `${grid.tableName.substring(0, 20)}_${suffix++}`
         }
-        
+
         const sheet = workbook.addWorksheet(sheetName)
-        sheet.columns = cachedData.fields.map(f => ({ header: f.name, key: f.name, width: 20 }))
-        cachedData.rows.forEach(row => {
+        sheet.columns = cachedData.fields.map((f) => ({ header: f.name, key: f.name, width: 20 }))
+        cachedData.rows.forEach((row) => {
           sheet.addRow(row)
         })
       }
@@ -157,7 +234,9 @@ function AppContent() {
     }
 
     const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -169,12 +248,14 @@ function AppContent() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       {sidebarOpen && <ConnectionSidebar />}
-      
-      <div className={`flex-1 flex flex-col h-full bg-background overflow-hidden transition-all duration-300 ${sidebarOpen ? 'border-l border-border/50' : ''}`}>
+
+      <div
+        className={`flex-1 flex flex-col h-full bg-background overflow-hidden transition-all duration-300 ${sidebarOpen ? 'border-l border-border/50' : ''}`}
+      >
         {tabs.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
             {!sidebarOpen && (
-              <button 
+              <button
                 onClick={toggleSidebar}
                 className="absolute top-4 left-4 p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all shadow-sm border border-primary/20 group"
                 title="Show Sidebar"
@@ -182,7 +263,7 @@ function AppContent() {
                 <PanelLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
               </button>
             )}
-            
+
             <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mb-6 ring-1 ring-border/50 shadow-inner">
               <Table className="w-10 h-10 text-muted-foreground/20" />
             </div>
@@ -190,9 +271,9 @@ function AppContent() {
             <p className="text-muted-foreground text-sm max-w-[280px] text-center mb-8 leading-relaxed">
               Open a table from the sidebar to start a new investigation tab.
             </p>
-            
+
             {!sidebarOpen && (
-              <button 
+              <button
                 onClick={toggleSidebar}
                 className="px-6 py-2.5 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-all font-medium shadow-md active:scale-95"
               >
@@ -204,16 +285,24 @@ function AppContent() {
           <>
             {/* Tab Bar */}
             <div className="h-10 border-b border-border bg-muted/20 flex items-center overflow-x-auto overflow-y-hidden scrollbar-hide shrink-0 px-2 gap-1">
-              <button 
+              <button
                 onClick={toggleSidebar}
                 className={`p-1.5 hover:bg-secondary rounded-md transition-all mr-1 ${
                   !sidebarOpen ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
                 }`}
-                title={sidebarOpen ? "Hide Sidebar" : "Show Sidebar"}
+                title={sidebarOpen ? 'Hide Sidebar' : 'Show Sidebar'}
               >
                 <PanelLeft className="w-4 h-4" />
               </button>
-              
+
+              <button
+                onClick={toggleLogViewer}
+                className="p-1.5 hover:bg-secondary rounded-md text-muted-foreground transition-all mr-1"
+                title="Toggle Log Viewer"
+              >
+                <Terminal className="w-4 h-4" />
+              </button>
+
               {tabs.map((tab) => (
                 <EditableTab
                   key={tab.id}
@@ -229,10 +318,12 @@ function AppContent() {
             {/* Grid Content */}
             <div className="flex-1 overflow-hidden relative bg-muted/5">
               {tabs.map((tab) => (
-                <div 
-                  key={tab.id} 
+                <div
+                  key={tab.id}
                   className={`absolute inset-0 flex flex-col transition-opacity duration-200 ${
-                    activeTabId === tab.id ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                    activeTabId === tab.id
+                      ? 'opacity-100 z-10'
+                      : 'opacity-0 z-0 pointer-events-none'
                   }`}
                 >
                   {/* Tab Toolbar */}
@@ -245,9 +336,9 @@ function AppContent() {
                         {tab.title}
                       </h2>
                     </div>
-                    
+
                     {tab.type === 'table' && (
-                      <button 
+                      <button
                         onClick={() => handleExportTabExcel(tab.id)}
                         className="flex items-center gap-2.5 px-3.5 py-1.5 bg-green-600/10 text-green-600 hover:bg-green-600 text-xs font-semibold hover:text-white rounded-lg transition-all border border-green-600/20 hover:border-green-600 shadow-sm active:scale-95 group"
                         title="Export all tables in this tab to a single Excel file"
@@ -263,10 +354,8 @@ function AppContent() {
                       <QueryEditor tabId={tab.id} />
                     ) : (
                       grids
-                        .filter(g => g.tabId === tab.id)
-                        .map((grid) => (
-                          <DataGrid key={grid.id} gridId={grid.id} />
-                        ))
+                        .filter((g) => g.tabId === tab.id)
+                        .map((grid) => <DataGrid key={grid.id} gridId={grid.id} />)
                     )}
                   </div>
                 </div>
@@ -275,6 +364,7 @@ function AppContent() {
           </>
         )}
       </div>
+      <LogViewer />
     </div>
   )
 }

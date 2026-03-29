@@ -9,8 +9,8 @@ interface QueryEditorProps {
 }
 
 export function QueryEditor({ tabId }: QueryEditorProps) {
-  const { tabs, updateTab, activeConnectionId } = useAppStore()
-  const tab = tabs.find(t => t.id === tabId)
+  const { tabs, updateTab } = useAppStore()
+  const tab = tabs.find((t) => t.id === tabId)
   if (!tab || tab.type !== 'query') return null
 
   const [isLoading, setIsLoading] = useState(false)
@@ -19,10 +19,8 @@ export function QueryEditor({ tabId }: QueryEditorProps) {
   const stopRef = useRef(false)
 
   const { data: connections } = useConnections()
-  const baseConn = connections?.find(c => c.id === activeConnectionId)
-  const conn = baseConn && tab.databaseName 
-    ? { ...baseConn, database: tab.databaseName } 
-    : baseConn
+  const baseConn = connections?.find((c) => c.id === tab.connectionId)
+  const conn = baseConn && tab.databaseName ? { ...baseConn, database: tab.databaseName } : baseConn
 
   const handleExecute = async () => {
     if (!conn || !tab.queryText) return
@@ -53,14 +51,16 @@ export function QueryEditor({ tabId }: QueryEditorProps) {
 
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet('Query Results')
-    
+
     sheet.columns = results.fields.map((f: any) => ({ header: f.name, key: f.name, width: 20 }))
     results.rows.forEach((row: any) => {
       sheet.addRow(row)
     })
 
     const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -76,7 +76,9 @@ export function QueryEditor({ tabId }: QueryEditorProps) {
         <div className="h-10 border-b border-border bg-muted/30 flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-primary" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SQL Editor</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              SQL Editor
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -110,14 +112,16 @@ export function QueryEditor({ tabId }: QueryEditorProps) {
       <div className="flex-1 flex flex-col min-h-0">
         <div className="h-10 border-b border-border bg-muted/30 flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Query Results</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Query Results
+            </span>
             {results && (
               <span className="ml-3 px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded-full">
                 {results.rows.length.toLocaleString()} rows
               </span>
             )}
           </div>
-          <button 
+          <button
             onClick={handleExportExcel}
             disabled={!results || results.rows.length === 0}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-green-600/10 text-green-600 hover:bg-green-600 hover:text-white disabled:opacity-30 disabled:hover:bg-green-600/10 disabled:hover:text-green-600 rounded-md text-[10px] font-bold transition-all border border-green-600/20 hover:border-green-600 shadow-sm active:scale-95 group"
@@ -156,7 +160,10 @@ export function QueryEditor({ tabId }: QueryEditorProps) {
                   <thead className="text-xs text-muted-foreground bg-muted/50 border-b border-border sticky top-0 z-10">
                     <tr>
                       {results.fields.map((f: any) => (
-                        <th key={f.name} className="px-4 py-3 font-medium tracking-wider bg-muted/80 backdrop-blur-sm border-r border-border/50 last:border-r-0">
+                        <th
+                          key={f.name}
+                          className="px-4 py-3 font-medium tracking-wider bg-muted/80 backdrop-blur-sm border-r border-border/50 last:border-r-0"
+                        >
                           {f.name}
                         </th>
                       ))}
@@ -164,10 +171,20 @@ export function QueryEditor({ tabId }: QueryEditorProps) {
                   </thead>
                   <tbody>
                     {results.rows.map((row: any, i: number) => (
-                      <tr key={i} className="border-b border-border/50 last:border-b-0 hover:bg-primary/5 transition-colors">
+                      <tr
+                        key={i}
+                        className="border-b border-border/50 last:border-b-0 hover:bg-primary/5 transition-colors"
+                      >
                         {results.fields.map((f: any) => (
-                          <td key={f.name} className="px-4 py-2.5 text-foreground/80 border-r border-border/30 last:border-r-0 font-mono text-xs max-w-[300px] truncate">
-                            {row[f.name] === null ? <span className="text-muted-foreground italic">NULL</span> : String(row[f.name])}
+                          <td
+                            key={f.name}
+                            className="px-4 py-2.5 text-foreground/80 border-r border-border/30 last:border-r-0 font-mono text-xs max-w-[300px] truncate"
+                          >
+                            {row[f.name] === null ? (
+                              <span className="text-muted-foreground italic">NULL</span>
+                            ) : (
+                              String(row[f.name])
+                            )}
                           </td>
                         ))}
                       </tr>

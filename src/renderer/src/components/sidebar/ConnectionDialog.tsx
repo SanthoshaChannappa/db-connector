@@ -8,7 +8,11 @@ interface ConnectionDialogProps {
   folders?: ConnectionFolder[]
 }
 
-export function ConnectionDialog({ onClose, existingConnection, folders = [] }: ConnectionDialogProps) {
+export function ConnectionDialog({
+  onClose,
+  existingConnection,
+  folders = []
+}: ConnectionDialogProps): React.ReactElement {
   const [formData, setFormData] = useState<Partial<DBConnection>>(
     existingConnection || {
       name: '',
@@ -17,19 +21,22 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
       port: 5432,
       user: '',
       password: '',
-      database: '',
       ssl: false,
       folderId: undefined
     }
   )
-  const [testStatus, setTestStatus] = useState<{ loading: boolean; success?: boolean; error?: string }>({ loading: false })
+  const [testStatus, setTestStatus] = useState<{
+    loading: boolean
+    success?: boolean
+    error?: string
+  }>({ loading: false })
 
   const { mutateAsync: saveConnection } = useSaveConnection()
   const { mutateAsync: testConnection } = useTestConnection()
 
-  const generateId = () => Math.random().toString(36).substr(2, 9)
+  const generateId = (): string => Math.random().toString(36).substr(2, 9)
 
-  const handleTest = async () => {
+  const handleTest = async (): Promise<void> => {
     setTestStatus({ loading: true })
     try {
       await testConnection(formData as DBConnection)
@@ -39,7 +46,22 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
     }
   }
 
-  const handleSave = async () => {
+  const handleDriverChange = (driver: 'pg' | 'mysql' | 'mssql' | 'mongodb' | 'sqlite'): void => {
+    const defaultPorts = {
+      pg: 5432,
+      mysql: 3306,
+      mssql: 1433,
+      mongodb: 27017,
+      sqlite: undefined
+    }
+    setFormData({
+      ...formData,
+      driver,
+      port: defaultPorts[driver]
+    })
+  }
+
+  const handleSave = async (): Promise<void> => {
     if (!formData.name || !formData.driver) return
     const conn: DBConnection = {
       ...(formData as DBConnection),
@@ -52,23 +74,27 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card w-full max-w-md rounded-lg shadow-xl border border-border p-6 flex flex-col gap-5">
-        <h3 className="text-lg font-semibold">{existingConnection ? 'Edit Connection' : 'New Connection'}</h3>
-        
+        <h3 className="text-lg font-semibold">
+          {existingConnection ? 'Edit Connection' : 'New Connection'}
+        </h3>
+
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-sm font-medium">
             Name
-            <input 
+            <input
               className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-              value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} 
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="My Database"
             />
           </label>
-          
+
           <label className="flex flex-col gap-1 text-sm font-medium">
             Driver
-            <select 
+            <select
               className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-              value={formData.driver} onChange={e => setFormData({ ...formData, driver: e.target.value as any })}
+              value={formData.driver}
+              onChange={(e) => handleDriverChange(e.target.value as any)}
             >
               <option value="pg">PostgreSQL</option>
               <option value="mysql">MySQL</option>
@@ -81,46 +107,49 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
           <div className="grid grid-cols-3 gap-4">
             <label className="col-span-2 flex flex-col gap-1 text-sm font-medium">
               Host / Path
-              <input 
+              <input
                 className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                value={formData.host || ''} onChange={e => setFormData({ ...formData, host: e.target.value })} 
+                value={formData.host || ''}
+                onChange={(e) => setFormData({ ...formData, host: e.target.value })}
                 placeholder="localhost"
               />
             </label>
             <label className="col-span-1 flex flex-col gap-1 text-sm font-medium">
               Port
-              <input 
+              <input
                 type="number"
                 className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                value={formData.port || ''} onChange={e => setFormData({ ...formData, port: parseInt(e.target.value) || undefined })} 
+                value={formData.port || ''}
+                onChange={(e) =>
+                  setFormData({ ...formData, port: parseInt(e.target.value) || undefined })
+                }
                 placeholder="5432"
               />
             </label>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            Database
-            <input 
-              className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-              value={formData.database || ''} onChange={e => setFormData({ ...formData, database: e.target.value })} 
-              placeholder="postgres"
-            />
-          </label>
-
           <div className="grid grid-cols-2 gap-4">
-            <label className="flex flex-col gap-1 text-sm font-medium">
+            <label
+              className={`flex flex-col gap-1 text-sm font-medium ${formData.integratedSecurity && formData.driver === 'mssql' ? 'opacity-50 pointer-events-none' : ''}`}
+            >
               User
-              <input 
+              <input
                 className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                value={formData.user || ''} onChange={e => setFormData({ ...formData, user: e.target.value })} 
+                value={formData.user || ''}
+                onChange={(e) => setFormData({ ...formData, user: e.target.value })}
+                disabled={formData.integratedSecurity && formData.driver === 'mssql'}
               />
             </label>
-            <label className="flex flex-col gap-1 text-sm font-medium">
+            <label
+              className={`flex flex-col gap-1 text-sm font-medium ${formData.integratedSecurity && formData.driver === 'mssql' ? 'opacity-50 pointer-events-none' : ''}`}
+            >
               Password
-              <input 
+              <input
                 type="password"
                 className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                value={formData.password || ''} onChange={e => setFormData({ ...formData, password: e.target.value })} 
+                value={formData.password || ''}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                disabled={formData.integratedSecurity && formData.driver === 'mssql'}
               />
             </label>
           </div>
@@ -130,31 +159,49 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
             <select
               className="px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
               value={formData.folderId ?? ''}
-              onChange={e => setFormData({ ...formData, folderId: e.target.value || undefined })}
+              onChange={(e) => setFormData({ ...formData, folderId: e.target.value || undefined })}
             >
               <option value="">— No Folder —</option>
-              {folders.map(f => (
-                <option key={f.id} value={f.id}>{f.name}</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
               ))}
             </select>
           </label>
 
-          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="w-4 h-4 rounded border-border text-primary focus:ring-ring"
-              checked={formData.ssl || false}
-              onChange={e => setFormData({ ...formData, ssl: e.target.checked })}
-            />
-            Use SSL/TLS (Required for RDS Proxy)
-          </label>
+          <div className="flex flex-col gap-2">
+            {formData.driver === 'mssql' && (
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-ring"
+                  checked={formData.integratedSecurity || false}
+                  onChange={(e) =>
+                    setFormData({ ...formData, integratedSecurity: e.target.checked })
+                  }
+                />
+                Integrated Security (Windows Authentication)
+              </label>
+            )}
+
+            <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-border text-primary focus:ring-ring"
+                checked={formData.ssl || false}
+                onChange={(e) => setFormData({ ...formData, ssl: e.target.checked })}
+              />
+              Use SSL/TLS (Required for RDS Proxy)
+            </label>
+          </div>
         </div>
 
         {testStatus.error && <p className="text-destructive text-sm">{testStatus.error}</p>}
         {testStatus.success && <p className="text-green-500 text-sm">Connection successful!</p>}
 
         <div className="flex justify-between mt-2 pt-4 border-t border-border">
-          <button 
+          <button
             type="button"
             onClick={handleTest}
             disabled={testStatus.loading}
@@ -162,15 +209,15 @@ export function ConnectionDialog({ onClose, existingConnection, folders = [] }: 
           >
             {testStatus.loading ? 'Testing...' : 'Test Connection'}
           </button>
-          
+
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={onClose}
               className="px-4 py-2 rounded-md hover:bg-secondary text-sm font-medium transition-colors"
             >
               Cancel
             </button>
-            <button 
+            <button
               onClick={handleSave}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 text-sm font-medium transition-colors"
             >

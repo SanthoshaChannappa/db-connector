@@ -14,7 +14,7 @@ export function generateQuery(
   let whereClause = ''
 
   if (filters.length > 0) {
-    const parts = filters.map(f => {
+    const parts = filters.map((f) => {
       const val = f.value
       const escapedVal = val.replace(/'/g, "''")
       const isExact = f.operator === '='
@@ -23,10 +23,13 @@ export function generateQuery(
         if (isExact) return { [f.column]: val }
         return { [f.column]: { $regex: val, $options: 'i' } }
       }
-      
-      const columnRef = conn.driver === 'mysql' ? `\`${f.column}\`` : 
-                        conn.driver === 'mssql' ? `[${f.column}]` : 
-                        `"${f.column}"`
+
+      const columnRef =
+        conn.driver === 'mysql'
+          ? `\`${f.column}\``
+          : conn.driver === 'mssql'
+            ? `[${f.column}]`
+            : `"${f.column}"`
 
       if (isExact) {
         if (conn.driver === 'pg') {
@@ -40,7 +43,7 @@ export function generateQuery(
         return `${columnRef} LIKE '%${escapedVal}%'`
       }
     })
-    
+
     if (conn.driver !== 'mongodb') {
       whereClause = ` WHERE ${parts.join(' AND ')}`
     }
@@ -58,30 +61,41 @@ export function generateQuery(
       }
       return acc
     }, {} as any)
-    
-    const mongoSort = sortState ? { [sortState.column]: sortState.direction === 'asc' ? 1 : -1 } : {}
-    
-    query = JSON.stringify({ 
-      collection: tableName, 
-      filter: mongoFilter,
-      sort: mongoSort,
-      limit: pageSize, 
-      skip: offset 
-    }, null, 2)
-    countQuery = JSON.stringify({ 
-      collection: tableName, 
-      filter: mongoFilter,
-      count: true 
-    }, null, 2)
+
+    const mongoSort = sortState
+      ? { [sortState.column]: sortState.direction === 'asc' ? 1 : -1 }
+      : {}
+
+    query = JSON.stringify(
+      {
+        collection: tableName,
+        filter: mongoFilter,
+        sort: mongoSort,
+        limit: pageSize,
+        skip: offset
+      },
+      null,
+      2
+    )
+    countQuery = JSON.stringify(
+      {
+        collection: tableName,
+        filter: mongoFilter,
+        count: true
+      },
+      null,
+      2
+    )
   } else {
-    const columnQuote = conn.driver === 'mysql' ? '`' : 
-                        conn.driver === 'mssql' ? '[' : '"'
+    const columnQuote = conn.driver === 'mysql' ? '`' : conn.driver === 'mssql' ? '[' : '"'
     const columnQuoteEnd = conn.driver === 'mssql' ? ']' : columnQuote
 
-    const orderBy = sortState 
-      ? ` ORDER BY ${columnQuote}${sortState.column}${columnQuoteEnd} ${sortState.direction.toUpperCase()}` 
-      : (conn.driver === 'mssql' ? ' ORDER BY (SELECT NULL)' : '')
-    
+    const orderBy = sortState
+      ? ` ORDER BY ${columnQuote}${sortState.column}${columnQuoteEnd} ${sortState.direction.toUpperCase()}`
+      : conn.driver === 'mssql'
+        ? ' ORDER BY (SELECT NULL)'
+        : ''
+
     if (conn.driver === 'mssql') {
       query = `SELECT * FROM [${tableName}]${whereClause}${orderBy} OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`
       countQuery = `SELECT COUNT(*) as total FROM [${tableName}]${whereClause}`

@@ -2,13 +2,68 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { getConnections, saveConnection, deleteConnection, getFolders, saveFolder, deleteFolder } from './store'
-import { testConnection, fetchSchema, executeQuery, fetchDatabases, fetchTableDetails, insertRow, updateRow, deleteRow } from './db'
+import {
+  getConnections,
+  saveConnection,
+  deleteConnection,
+  getFolders,
+  saveFolder,
+  deleteFolder
+} from './store'
+import {
+  testConnection,
+  fetchSchema,
+  executeQuery,
+  fetchDatabases,
+  fetchTableDetails,
+  insertRow,
+  updateRow,
+  deleteRow
+} from './db'
 import type { DBConnection } from './store'
+
+let mainWindow: BrowserWindow | null = null
+
+const sendLogToRenderer = (level: string, ...args: any[]) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const message = args
+      .map((arg) => (typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)))
+      .join(' ')
+
+    mainWindow.webContents.send('main-log', {
+      timestamp: new Date().toISOString(),
+      level,
+      message
+    })
+  }
+}
+
+// Intercept console methods
+const originalLog = console.log
+const originalInfo = console.info
+const originalWarn = console.warn
+const originalError = console.error
+
+console.log = (...args) => {
+  originalLog(...args)
+  sendLogToRenderer('log', ...args)
+}
+console.info = (...args) => {
+  originalInfo(...args)
+  sendLogToRenderer('info', ...args)
+}
+console.warn = (...args) => {
+  originalWarn(...args)
+  sendLogToRenderer('warn', ...args)
+}
+console.error = (...args) => {
+  originalError(...args)
+  sendLogToRenderer('error', ...args)
+}
 
 function createWindow(): void {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
     show: false,
@@ -21,7 +76,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -60,17 +115,34 @@ app.whenReady().then(() => {
   ipcMain.handle('get-folders', () => getFolders())
   ipcMain.handle('save-folder', (_, folder) => saveFolder(folder))
   ipcMain.handle('delete-folder', (_, id) => deleteFolder(id))
+  ipcMain.handle('get-app-version', () => app.getVersion())
 
   ipcMain.handle('test-connection', async (_, conn) => await testConnection(conn))
   ipcMain.handle('fetch-databases', async (_, conn) => await fetchDatabases(conn))
   ipcMain.handle('fetch-schema', async (_, conn) => await fetchSchema(conn))
-  ipcMain.handle('fetch-table-details', async (_, conn, tableName) => await fetchTableDetails(conn, tableName))
-  ipcMain.handle('execute-query', async (_, conn, query, values) => await executeQuery(conn, query, values))
-  ipcMain.handle('insert-row', async (_, conn, tableName, row) => await insertRow(conn, tableName, row))
-  ipcMain.handle('update-row', async (_, conn, tableName, pkKeys, oldRow, newRow) => await updateRow(conn, tableName, pkKeys, oldRow, newRow))
-  ipcMain.handle('delete-row', (_, conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade: boolean) => {
-    return deleteRow(conn, tableName, pkKeys, row, cascade)
-  })
+  ipcMain.handle(
+    'fetch-table-details',
+    async (_, conn, tableName) => await fetchTableDetails(conn, tableName)
+  )
+  ipcMain.handle(
+    'execute-query',
+    async (_, conn, query, values) => await executeQuery(conn, query, values)
+  )
+  ipcMain.handle(
+    'insert-row',
+    async (_, conn, tableName, row) => await insertRow(conn, tableName, row)
+  )
+  ipcMain.handle(
+    'update-row',
+    async (_, conn, tableName, pkKeys, oldRow, newRow) =>
+      await updateRow(conn, tableName, pkKeys, oldRow, newRow)
+  )
+  ipcMain.handle(
+    'delete-row',
+    (_, conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade: boolean) => {
+      return deleteRow(conn, tableName, pkKeys, row, cascade)
+    }
+  )
 
   createWindow()
 

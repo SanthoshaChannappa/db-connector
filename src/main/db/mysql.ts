@@ -25,11 +25,11 @@ export async function fetchMysqlDatabases(conn: DBConnection) {
     connectTimeout: 5000,
     ssl: conn.ssl ? { rejectUnauthorized: false } : undefined
   })
-  
+
   const [rows] = await connection.execute('SHOW DATABASES')
   await connection.end()
-  
-  return (rows as any[]).map(row => ({ name: row.Database, type: 'database' }))
+
+  return (rows as any[]).map((row) => ({ name: row.Database, type: 'database' }))
 }
 
 export async function fetchMysqlSchema(conn: DBConnection) {
@@ -42,11 +42,11 @@ export async function fetchMysqlSchema(conn: DBConnection) {
     connectTimeout: 5000,
     ssl: conn.ssl ? { rejectUnauthorized: false } : undefined
   })
-  
+
   const [rows] = await connection.execute('SHOW TABLES')
   await connection.end()
-  
-  return (rows as any[]).map(row => {
+
+  return (rows as any[]).map((row) => {
     const tableKey = Object.keys(row)[0]
     return { name: row[tableKey], type: 'table' }
   })
@@ -62,12 +62,12 @@ export async function executeMysqlQuery(conn: DBConnection, query: string, value
     connectTimeout: 5000,
     ssl: conn.ssl ? { rejectUnauthorized: false } : undefined
   })
-  
+
   try {
     const [rows, fields] = await connection.execute(query, values)
     return {
       rows: rows as any[],
-      fields: fields ? fields.map(f => ({ name: f.name })) : []
+      fields: fields ? fields.map((f) => ({ name: f.name })) : []
     }
   } finally {
     await connection.end()
@@ -92,7 +92,8 @@ export async function fetchMysqlTableDetails(conn: DBConnection, tableName: stri
     `)
 
     // 2. Get Foreign Keys (Master tables this table points to)
-    const [fkRows] = await connection.execute(`
+    const [fkRows] = await connection.execute(
+      `
       SELECT 
         COLUMN_NAME, 
         REFERENCED_TABLE_NAME, 
@@ -101,23 +102,46 @@ export async function fetchMysqlTableDetails(conn: DBConnection, tableName: stri
         INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
       WHERE 
         TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
-    `, [conn.database || '', tableName])
+    `,
+      [conn.database || '', tableName]
+    )
 
     // 3. Get Dependent Tables (Tables that reference this table)
-    const [depRows] = await connection.execute(`
+    const [depRows] = await connection.execute(
+      `
       SELECT TABLE_NAME, COLUMN_NAME
       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
       WHERE REFERENCED_TABLE_NAME = ? AND REFERENCED_TABLE_SCHEMA = ?
-    `, [tableName as any, conn.database as any])
+    `,
+      [tableName as any, conn.database as any]
+    )
+
+    // 4. Get Column Types
+    const [columnRows] = await connection.execute(
+      `
+      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+    `,
+      [conn.database || '', tableName]
+    )
 
     return {
-      primaryKeys: (pkRows as any[]).map(r => r.Column_name),
-      foreignKeys: (fkRows as any[]).map(r => ({
+      primaryKeys: (pkRows as any[]).map((r) => r.Column_name),
+      foreignKeys: (fkRows as any[]).map((r) => ({
         column: r.COLUMN_NAME,
         referencedTable: r.REFERENCED_TABLE_NAME,
         referencedColumn: r.REFERENCED_COLUMN_NAME
       })),
-      dependentTables: (depRows as any[]).map(r => ({ table: r.TABLE_NAME, column: r.COLUMN_NAME }))
+      dependentTables: (depRows as any[]).map((r) => ({
+        table: r.TABLE_NAME,
+        column: r.COLUMN_NAME
+      })),
+      columns: (columnRows as any[]).map((r) => ({
+        name: r.COLUMN_NAME,
+        type: r.DATA_TYPE,
+        nullable: r.IS_NULLABLE === 'YES'
+      }))
     }
   } finally {
     await connection.end()
@@ -135,8 +159,12 @@ export async function insertMysqlRow(conn: DBConnection, tableName: string, row:
     ssl: conn.ssl ? { rejectUnauthorized: false } : undefined
   })
   try {
-    const columns = Object.keys(row).map(c => `\`${c}\``).join(', ')
-    const placeholders = Object.keys(row).map(() => '?').join(', ')
+    const columns = Object.keys(row)
+      .map((c) => `\`${c}\``)
+      .join(', ')
+    const placeholders = Object.keys(row)
+      .map(() => '?')
+      .join(', ')
     const values = Object.values(row) as any[]
     const query = `INSERT INTO \`${tableName}\` (${columns}) VALUES (${placeholders})`
     await connection.execute(query, values)
@@ -146,7 +174,13 @@ export async function insertMysqlRow(conn: DBConnection, tableName: string, row:
   }
 }
 
-export async function updateMysqlRow(conn: DBConnection, tableName: string, pkKeys: string[], oldRow: any, newRow: any) {
+export async function updateMysqlRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  oldRow: any,
+  newRow: any
+) {
   const connection = await mysql.createConnection({
     host: conn.host,
     user: conn.user,
@@ -166,7 +200,7 @@ export async function updateMysqlRow(conn: DBConnection, tableName: string, pkKe
     })
 
     const whereParts: string[] = []
-    pkKeys.forEach(pk => {
+    pkKeys.forEach((pk) => {
       whereParts.push(`\`${pk}\` = ?`)
       values.push(oldRow[pk])
     })
@@ -179,7 +213,13 @@ export async function updateMysqlRow(conn: DBConnection, tableName: string, pkKe
   }
 }
 
-export async function deleteMysqlRow(conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade = false) {
+export async function deleteMysqlRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  row: any,
+  cascade = false
+) {
   const connection = await mysql.createConnection({
     host: conn.host,
     user: conn.user,
@@ -202,7 +242,7 @@ export async function deleteMysqlRow(conn: DBConnection, tableName: string, pkKe
     const whereParts: string[] = []
     const values: any[] = []
 
-    pkKeys.forEach(pk => {
+    pkKeys.forEach((pk) => {
       whereParts.push(`\`${pk}\` = ?`)
       values.push(row[pk])
     })

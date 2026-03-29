@@ -1,204 +1,267 @@
-import { Connection, Request, TYPES } from 'tedious'
+import * as mssql from 'mssql/msnodesqlv8'
 import type { DBConnection } from '../store'
 
-function createConnection(conn: DBConnection): Promise<Connection> {
-  return new Promise((resolve, reject) => {
-    const config = {
-      server: conn.host || 'localhost',
-      authentication: {
-        type: 'default',
-        options: {
-          userName: conn.user || '',
-          password: conn.password || ''
-        }
-      },
+async function getPool(conn: DBConnection): Promise<mssql.ConnectionPool> {
+  const host = conn.host || 'localhost'
+  const database = conn.database || 'master'
+
+  let config: any
+
+  if (conn.integratedSecurity) {
+    // For msnodesqlv8, Integrated Security is most reliable via connection string
+    // Driver={msnodesqlv8} is the internal name for this driver in the mssql package
+    const connectionString = `Driver={msnodesqlv8};Server=${host};Database=${database};Trusted_Connection=Yes;`
+    config = {
+      connectionString,
       options: {
-        port: conn.port || 1433,
-        database: conn.database,
+        encrypt: conn.ssl ?? true,
         trustServerCertificate: true,
-        encrypt: !!conn.ssl,
-        connectTimeout: 5000
+        connectTimeout: 10000
       }
     }
-    const connection = new Connection(config as any)
-    connection.on('connect', err => {
-      if (err) reject(err)
-      else resolve(connection)
-    })
-    connection.connect()
-  })
+  } else {
+    const hostParts = host.split('\\')
+    const server = hostParts[0]
+    const instanceName = hostParts[1]
+
+    config = {
+      user: conn.user,
+      password: conn.password,
+      server: server,
+      database: database,
+      options: {
+        encrypt: conn.ssl ?? true,
+        trustServerCertificate: true,
+        connectTimeout: 10000
+      }
+    }
+
+    if (instanceName) {
+      config.options.instanceName = instanceName
+    } else {
+      config.port = conn.port || 1433
+    }
+  }
+
+  return await new mssql.ConnectionPool(config).connect()
 }
 
-export async function testMssqlConnection(conn: DBConnection) {
-  const connection = await createConnection(conn)
-  connection.close()
-  return true
+export async function testMssqlConnection(conn: DBConnection): Promise<boolean> {
+  const pool = await getPool(conn)
+  try {
+    await pool.request().query('SELECT 1')
+    return true
+  } finally {
+    await pool.close()
+  }
 }
 
-export async function fetchMssqlDatabases(conn: DBConnection) {
+export async function fetchMssqlDatabases(conn: DBConnection): Promise<any[]> {
   const serverConn = { ...conn, database: undefined }
-  const connection = await createConnection(serverConn)
-  return new Promise<any[]>((resolve, reject) => {
-    const databases: any[] = []
-    const request = new Request(`SELECT name FROM sys.databases WHERE state = 0 AND name NOT IN ('master', 'tempdb', 'model', 'msdb')`, (err) => {
-      if (err) reject(err)
-      else {
-        connection.close()
-        resolve(databases.map(d => ({ name: d.name, type: 'database' })))
-      }
-    })
-    request.on('row', columns => {
-      const rowData: any = {}
-      columns.forEach(col => { rowData[col.metadata.colName] = col.value })
-      databases.push(rowData)
-    })
-    connection.execSql(request)
-  })
+  const pool = await getPool(serverConn)
+  try {
+    const result = await pool
+      .request()
+      .query(
+        "SELECT name FROM sys.databases WHERE state = 0 AND name NOT IN ('master', 'tempdb', 'model', 'msdb')"
+      )
+    return result.recordset.map((row) => ({ name: row.name, type: 'database' }))
+  } finally {
+    await pool.close()
+  }
 }
 
-export async function fetchMssqlSchema(conn: DBConnection) {
-  const connection = await createConnection(conn)
-  return new Promise<any[]>((resolve, reject) => {
-    const tables: any[] = []
-    const request = new Request(`SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'`, (err) => {
-      if (err) reject(err)
-      else {
-        connection.close()
-        resolve(tables.map(t => ({ name: t.TABLE_NAME, type: 'table' })))
-      }
-    })
-    request.on('row', columns => {
-      const rowData: any = {}
-      columns.forEach(col => { rowData[col.metadata.colName] = col.value })
-      tables.push(rowData)
-    })
-    connection.execSql(request)
-  })
+export async function fetchMssqlSchema(conn: DBConnection): Promise<any[]> {
+  const pool = await getPool(conn)
+  try {
+    const result = await pool
+      .request()
+      .query(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME"
+      )
+    return result.recordset.map((row) => ({ name: row.TABLE_NAME, type: 'table' }))
+  } finally {
+    await pool.close()
+  }
 }
 
-export async function executeMssqlQuery(conn: DBConnection, query: string, _values?: any[]) {
-  const connection = await createConnection(conn)
-  return new Promise<any>((resolve, reject) => {
-    const rows: any[] = []
-    let fields: any[] = []
-    const request = new Request(query, (err) => {
-      if (err) reject(err)
-      else {
-        connection.close()
-        resolve({ rows, fields: fields.map(f => ({ name: f })) })
-      }
-    })
-    // @ts-ignore
-    request.on('columnMetadata', (columns: any[]) => { fields = columns.map(c => c.colName) })
-    request.on('row', columns => {
-      const rowData: any = {}
-      columns.forEach(col => { rowData[col.metadata.colName] = col.value })
-      rows.push(rowData)
-    })
-    connection.execSql(request)
-  })
-}
-
-export async function fetchMssqlTableDetails(conn: DBConnection, tableName: string) {
-  const connection = await createConnection(conn)
-  return new Promise<any>((resolve, reject) => {
-    const primaryKeys: string[] = []
-    const foreignKeys: any[] = []
-    const dependentTables: { table: string, column: string }[] = []
-    const query = `
-      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME = @tableName AND CONSTRAINT_NAME LIKE 'PK_%';
-      SELECT COL_NAME(fc.parent_object_id, fc.parent_column_id) AS [column], OBJECT_NAME (f.referenced_object_id) AS referencedTable, COL_NAME(f.referenced_object_id, f.referenced_column_id) AS referencedColumn FROM sys.foreign_keys AS f INNER JOIN sys.foreign_key_columns AS fc ON f.OBJECT_ID = fc.constraint_object_id WHERE OBJECT_NAME(f.parent_object_id) = @tableName;
-      SELECT OBJECT_NAME(f.parent_object_id) AS TableName, COL_NAME(fc.parent_object_id, fc.parent_column_id) AS ColumnName FROM sys.foreign_keys AS f INNER JOIN sys.foreign_key_columns AS fc ON f.object_id = fc.constraint_object_id WHERE OBJECT_NAME(f.referenced_object_id) = @tableName;
-    `
-    const request = new Request(query, (err) => {
-      if (err) reject(err)
-      else {
-        connection.close()
-        resolve({ primaryKeys, foreignKeys, dependentTables })
-      }
-    })
-    request.addParameter('tableName', TYPES.VarChar, tableName)
-    let resultSetIndex = 0
-    request.on('doneInProc', () => { resultSetIndex++ })
-    request.on('row', (columns) => {
-      const rowData: any = {}
-      columns.forEach(col => { rowData[col.metadata.colName] = col.value })
-      if (resultSetIndex === 0) primaryKeys.push(rowData.COLUMN_NAME)
-      else if (resultSetIndex === 1) foreignKeys.push({ column: rowData.column, referencedTable: rowData.referencedTable, referencedColumn: rowData.referencedColumn })
-      else if (resultSetIndex === 2) dependentTables.push({ table: rowData.TableName, column: rowData.ColumnName })
-    })
-    connection.execSql(request)
-  })
-}
-
-export async function insertMssqlRow(conn: DBConnection, tableName: string, row: any) {
-  const connection = await createConnection(conn)
-  return new Promise((resolve, reject) => {
-    const columns = Object.keys(row).map(c => `[${c}]`).join(', ')
-    const values = Object.values(row).map(v => typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : v).join(', ')
-    const query = `INSERT INTO [${tableName}] (${columns}) VALUES (${values})`
-    const request = new Request(query, (err) => {
-      connection.close()
-      if (err) reject(err)
-      else resolve(true)
-    })
-    connection.execSql(request)
-  })
-}
-
-export async function updateMssqlRow(conn: DBConnection, tableName: string, pkKeys: string[], oldRow: any, newRow: any) {
-  const connection = await createConnection(conn)
-  return new Promise((resolve, reject) => {
-    const setParts = Object.entries(newRow).map(([col, val]) => {
-      const value = typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : val
-      return `[${col}] = ${value}`
-    })
-    const whereParts = pkKeys.map(pk => {
-      const val = oldRow[pk]
-      const value = typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : val
-      return `[${pk}] = ${value}`
-    })
-    const query = `UPDATE [${tableName}] SET ${setParts.join(', ')} WHERE ${whereParts.join(' AND ')}`
-    const request = new Request(query, (err) => {
-      connection.close()
-      if (err) reject(err)
-      else resolve(true)
-    })
-    connection.execSql(request)
-  })
-}
-
-export async function deleteMssqlRow(conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade = false) {
-  const connection = await createConnection(conn)
-  return new Promise(async (resolve, reject) => {
-    try {
-      if (cascade) {
-        const details = await fetchMssqlTableDetails(conn, tableName)
-        for (const dep of details.dependentTables) {
-          const pkValue = row[pkKeys[0]]
-          const value = typeof pkValue === 'string' ? `'${pkValue.replace(/'/g, "''")}'` : pkValue
-          const query = `DELETE FROM [${dep.table}] WHERE [${dep.column}] = ${value}`
-          await new Promise((res, rej) => {
-            const req = new Request(query, (e) => e ? rej(e) : res(true))
-            connection.execSql(req)
-          })
-        }
-      }
-      const whereParts = pkKeys.map(pk => {
-        const val = row[pk]
-        const value = typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : val
-        return `[${pk}] = ${value}`
+export async function executeMssqlQuery(
+  conn: DBConnection,
+  query: string,
+  values?: any[]
+): Promise<{ rows: any[]; fields: any[] }> {
+  const pool = await getPool(conn)
+  try {
+    const request = pool.request()
+    if (values) {
+      values.forEach((val, i) => {
+        request.input(`p${i}`, val)
       })
-      const query = `DELETE FROM [${tableName}] WHERE ${whereParts.join(' AND ')}`
-      const request = new Request(query, (err) => {
-        connection.close()
-        if (err) reject(err)
-        else resolve(true)
-      })
-      connection.execSql(request)
-    } catch (e) {
-      connection.close()
-      reject(e)
     }
-  })
+    const result = await request.query(query)
+    const fields = result.recordset.columns
+      ? Object.keys(result.recordset.columns).map((name) => ({ name }))
+      : []
+    return {
+      rows: result.recordset,
+      fields
+    }
+  } finally {
+    await pool.close()
+  }
+}
+
+export async function fetchMssqlTableDetails(conn: DBConnection, tableName: string): Promise<any> {
+  const pool = await getPool(conn)
+  try {
+    const request = pool.request()
+    request.input('tableName', mssql.VarChar, tableName)
+
+    // 1. Primary Keys
+    const pkResult = await request.query(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+      WHERE TABLE_NAME = @tableName AND CONSTRAINT_NAME LIKE 'PK_%'
+    `)
+
+    // 2. Foreign Keys
+    const fkResult = await request.query(`
+      SELECT 
+        COL_NAME(fc.parent_object_id, fc.parent_column_id) AS [column], 
+        OBJECT_NAME(fc.referenced_object_id) AS referencedTable, 
+        COL_NAME(fc.referenced_object_id, fc.referenced_column_id) AS referencedColumn 
+      FROM sys.foreign_keys AS f 
+      INNER JOIN sys.foreign_key_columns AS fc ON f.object_id = fc.constraint_object_id 
+      WHERE OBJECT_NAME(f.parent_object_id) = @tableName
+    `)
+
+    // 3. Dependent Tables
+    const depResult = await request.query(`
+      SELECT OBJECT_NAME(f.parent_object_id) AS TableName, COL_NAME(fc.parent_object_id, fc.parent_column_id) AS ColumnName 
+      FROM sys.foreign_keys AS f 
+      INNER JOIN sys.foreign_key_columns AS fc ON f.object_id = fc.constraint_object_id 
+      WHERE OBJECT_NAME(f.referenced_object_id) = @tableName
+    `)
+
+    // 4. Columns
+    const colResult = await request.query(`
+      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_NAME = @tableName
+    `)
+
+    return {
+      primaryKeys: pkResult.recordset.map((r) => r.COLUMN_NAME),
+      foreignKeys: fkResult.recordset.map((r) => ({
+        column: r.column,
+        referencedTable: r.referencedTable,
+        referencedColumn: r.referencedColumn
+      })),
+      dependentTables: depResult.recordset.map((r) => ({
+        table: r.TableName,
+        column: r.ColumnName
+      })),
+      columns: colResult.recordset.map((r) => ({
+        name: r.COLUMN_NAME,
+        type: r.DATA_TYPE,
+        nullable: r.IS_NULLABLE === 'YES'
+      }))
+    }
+  } finally {
+    await pool.close()
+  }
+}
+
+export async function insertMssqlRow(
+  conn: DBConnection,
+  tableName: string,
+  row: Record<string, any>
+): Promise<boolean> {
+  const pool = await getPool(conn)
+  try {
+    const request = pool.request()
+    const columns = Object.keys(row)
+      .map((c) => `[${c}]`)
+      .join(', ')
+    const placeholders = Object.keys(row)
+      .map((c, i) => {
+        request.input(`v${i}`, row[c])
+        return `@v${i}`
+      })
+      .join(', ')
+
+    const query = `INSERT INTO [${tableName}] (${columns}) VALUES (${placeholders})`
+    await request.query(query)
+    return true
+  } finally {
+    await pool.close()
+  }
+}
+
+export async function updateMssqlRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  oldRow: Record<string, any>,
+  newRow: Record<string, any>
+): Promise<boolean> {
+  const pool = await getPool(conn)
+  try {
+    const request = pool.request()
+    const setParts = Object.keys(newRow)
+      .map((col, i) => {
+        request.input(`nv${i}`, newRow[col])
+        return `[${col}] = @nv${i}`
+      })
+      .join(', ')
+
+    const whereParts = pkKeys
+      .map((pk, i) => {
+        request.input(`pk${i}`, oldRow[pk])
+        return `[${pk}] = @pk${i}`
+      })
+      .join(' AND ')
+
+    const query = `UPDATE [${tableName}] SET ${setParts} WHERE ${whereParts}`
+    await request.query(query)
+    return true
+  } finally {
+    await pool.close()
+  }
+}
+
+export async function deleteMssqlRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  row: Record<string, any>,
+  cascade = false
+): Promise<boolean> {
+  const pool = await getPool(conn)
+  try {
+    if (cascade) {
+      const details = await fetchMssqlTableDetails(conn, tableName)
+      for (const dep of details.dependentTables) {
+        const pkValue = row[pkKeys[0]]
+        const request = pool.request()
+        request.input('pkVal', pkValue)
+        const query = `DELETE FROM [${dep.table}] WHERE [${dep.column}] = @pkVal`
+        await request.query(query)
+      }
+    }
+
+    const request = pool.request()
+    const whereParts = pkKeys
+      .map((pk, i) => {
+        request.input(`pk${i}`, row[pk])
+        return `[${pk}] = @pk${i}`
+      })
+      .join(' AND ')
+
+    const query = `DELETE FROM [${tableName}] WHERE ${whereParts}`
+    await request.query(query)
+    return true
+  } finally {
+    await pool.close()
+  }
 }

@@ -17,7 +17,7 @@ export async function fetchMongoDatabases(conn: DBConnection) {
   await client.connect()
   const dbs = await client.db().admin().listDatabases()
   await client.close()
-  return dbs.databases.map(db => ({ name: db.name, type: 'database' }))
+  return dbs.databases.map((db) => ({ name: db.name, type: 'database' }))
 }
 
 export async function fetchMongoSchema(conn: DBConnection) {
@@ -28,7 +28,7 @@ export async function fetchMongoSchema(conn: DBConnection) {
   const db = client.db(conn.database)
   const collections = await db.listCollections().toArray()
   await client.close()
-  return collections.map(c => ({ name: c.name, type: 'collection' }))
+  return collections.map((c) => ({ name: c.name, type: 'collection' }))
 }
 
 export async function executeMongoQuery(conn: DBConnection, query: string, _values?: any[]) {
@@ -44,23 +44,25 @@ export async function executeMongoQuery(conn: DBConnection, query: string, _valu
     try {
       parsed = JSON.parse(query)
     } catch {
-      throw new Error("MongoDB query must be valid JSON: { collection: string, filter?: any, limit?: number }")
+      throw new Error(
+        'MongoDB query must be valid JSON: { collection: string, filter?: any, limit?: number }'
+      )
     }
     const collection = db.collection(parsed.collection || 'unknown')
     const limit = parsed.limit || 100
     const skip = parsed.skip || 0
     const filter = parsed.filter || {}
     const sort = parsed.sort || {}
-    
+
     const docs = await collection.find(filter).sort(sort).skip(skip).limit(limit).toArray()
-    
+
     // Extrapolate fields from the first 10 docs
     const fieldSet = new Set<string>()
-    docs.slice(0, 10).forEach(doc => Object.keys(doc).forEach(k => fieldSet.add(k)))
-    
+    docs.slice(0, 10).forEach((doc) => Object.keys(doc).forEach((k) => fieldSet.add(k)))
+
     return {
       rows: docs,
-      fields: Array.from(fieldSet).map(name => ({ name }))
+      fields: Array.from(fieldSet).map((name) => ({ name }))
     }
   } finally {
     await client.close()
@@ -82,7 +84,13 @@ export async function insertMongoRow(conn: DBConnection, tableName: string, row:
   }
 }
 
-export async function updateMongoRow(conn: DBConnection, tableName: string, pkKeys: string[], oldRow: any, newRow: any) {
+export async function updateMongoRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  oldRow: any,
+  newRow: any
+) {
   const url = `mongodb://${conn.user ? `${conn.user}:${conn.password}@` : ''}${conn.host}${conn.port ? `:${conn.port}` : ''}`
   const tlsParam = conn.ssl ? (url.includes('?') ? '&tls=true' : '?tls=true') : ''
   const client = new MongoClient(url + tlsParam)
@@ -90,10 +98,10 @@ export async function updateMongoRow(conn: DBConnection, tableName: string, pkKe
     await client.connect()
     const db = client.db(conn.database)
     const collection = db.collection(tableName)
-    
+
     // For Mongo, we usually just use _id as PK
     const filter: any = {}
-    pkKeys.forEach(k => {
+    pkKeys.forEach((k) => {
       filter[k] = oldRow[k]
       // Try to handle ObjectId if k is _id
       if (k === '_id' && typeof filter[k] === 'string' && filter[k].length === 24) {
@@ -112,7 +120,12 @@ export async function updateMongoRow(conn: DBConnection, tableName: string, pkKe
   }
 }
 
-export async function deleteMongoRow(conn: DBConnection, tableName: string, pkKeys: string[], row: any) {
+export async function deleteMongoRow(
+  conn: DBConnection,
+  tableName: string,
+  pkKeys: string[],
+  row: any
+) {
   const url = `mongodb://${conn.user ? `${conn.user}:${conn.password}@` : ''}${conn.host}${conn.port ? `:${conn.port}` : ''}`
   const tlsParam = conn.ssl ? (url.includes('?') ? '&tls=true' : '?tls=true') : ''
   const client = new MongoClient(url + tlsParam)
@@ -120,9 +133,9 @@ export async function deleteMongoRow(conn: DBConnection, tableName: string, pkKe
     await client.connect()
     const db = client.db(conn.database)
     const collection = db.collection(tableName)
-    
+
     const filter: any = {}
-    pkKeys.forEach(k => {
+    pkKeys.forEach((k) => {
       filter[k] = row[k]
       if (k === '_id' && typeof filter[k] === 'string' && filter[k].length === 24) {
         try {

@@ -10,8 +10,20 @@ declare global {
       fetchTableDetails: (conn: any, tableName: string) => Promise<any>
       executeQuery: (conn: any, query: string, values?: any[]) => Promise<any>
       insertRow: (conn: any, tableName: string, row: any) => Promise<boolean>
-      updateRow: (conn: any, tableName: string, pkKeys: string[], oldRow: any, newRow: any) => Promise<boolean>
-      deleteRow: (conn: any, tableName: string, pkKeys: string[], row: any, cascade: boolean) => Promise<boolean>
+      updateRow: (
+        conn: any,
+        tableName: string,
+        pkKeys: string[],
+        oldRow: any,
+        newRow: any
+      ) => Promise<boolean>
+      deleteRow: (
+        conn: any,
+        tableName: string,
+        pkKeys: string[],
+        row: any,
+        cascade: boolean
+      ) => Promise<boolean>
     }
   }
 }

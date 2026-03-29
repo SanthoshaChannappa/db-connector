@@ -55,7 +55,12 @@ export function useQueryData(conn: DBConnection | null, query: string, values?: 
 }
 
 export function useTableDetails(conn: DBConnection | null, tableName: string | null) {
-  return useQuery<{ primaryKeys: string[]; foreignKeys: any[]; dependentTables: string[] }>({
+  return useQuery<{
+    primaryKeys: string[]
+    foreignKeys: any[]
+    dependentTables: any[]
+    columns: { name: string; type: string; nullable: boolean }[]
+  }>({
     queryKey: ['table-details', conn?.id, tableName],
     queryFn: () => window.electron.ipcRenderer.invoke('fetch-table-details', conn, tableName),
     enabled: !!conn && !!tableName
@@ -108,8 +113,19 @@ export function useInsertRow() {
 export function useUpdateRow() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ conn, tableName, pkKeys, oldRow, newRow }: { conn: DBConnection; tableName: string; pkKeys: string[]; oldRow: any; newRow: any }) =>
-      window.electron.ipcRenderer.invoke('update-row', conn, tableName, pkKeys, oldRow, newRow),
+    mutationFn: ({
+      conn,
+      tableName,
+      pkKeys,
+      oldRow,
+      newRow
+    }: {
+      conn: DBConnection
+      tableName: string
+      pkKeys: string[]
+      oldRow: any
+      newRow: any
+    }) => window.electron.ipcRenderer.invoke('update-row', conn, tableName, pkKeys, oldRow, newRow),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['query', variables.conn.id] })
     }
@@ -119,8 +135,19 @@ export function useUpdateRow() {
 export function useDeleteRow() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ conn, tableName, pkKeys, row, cascade }: { conn: DBConnection, tableName: string, pkKeys: string[], row: any, cascade?: boolean }) => 
-      window.api.deleteRow(conn, tableName, pkKeys, row, cascade || false),
+    mutationFn: ({
+      conn,
+      tableName,
+      pkKeys,
+      row,
+      cascade
+    }: {
+      conn: DBConnection
+      tableName: string
+      pkKeys: string[]
+      row: any
+      cascade?: boolean
+    }) => window.api.deleteRow(conn, tableName, pkKeys, row, cascade || false),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['query-data'] })
       queryClient.invalidateQueries({ queryKey: ['count-data'] })

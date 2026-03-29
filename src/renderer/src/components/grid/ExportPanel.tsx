@@ -8,18 +8,19 @@ interface ExportPanelProps {
 }
 
 export function ExportPanel({ data, fields, tableName }: ExportPanelProps) {
-  
   const handleExportExcel = async () => {
     const workbook = new ExcelJS.Workbook()
     const sheet = workbook.addWorksheet(tableName)
-    
-    sheet.columns = fields.map(f => ({ header: f.name, key: f.name, width: 20 }))
-    data.forEach(row => {
+
+    sheet.columns = fields.map((f) => ({ header: f.name, key: f.name, width: 20 }))
+    data.forEach((row) => {
       sheet.addRow(row)
     })
-    
+
     const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -30,7 +31,7 @@ export function ExportPanel({ data, fields, tableName }: ExportPanelProps) {
 
   return (
     <div className="flex gap-2">
-      <button 
+      <button
         onClick={handleExportExcel}
         className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 text-green-600 hover:bg-green-600/30 rounded-md text-sm font-medium transition-colors"
         title="Export to Excel"

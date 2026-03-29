@@ -7,7 +7,7 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
-        external: ['pg', 'mysql2', 'tedious', 'mongodb', 'better-sqlite3']
+        external: ['pg', 'mysql2', 'tedious', 'mongodb', 'better-sqlite3', 'msnodesqlv8']
       }
     }
   },

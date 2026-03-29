@@ -1,10 +1,22 @@
 {
-  "name": "app",
-  "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "name": "db-connector",
+  "version": "1.1.0",
+  "description": "A simple database connector for PostgreSQL, MySQL, MSSQL, MongoDB, and SQLite built for simple querying.",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "https://github.com/SanthoshaChannappa",
+  "homepage": "https://github.com/SanthoshaChannappa/db-connector",
+  "build": {
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "publisherName": "Santhosha Channappa"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "SanthoshaChannappa",
+      "repo": "db-connector"
+    }
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -32,10 +44,11 @@
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.577.0",
     "mongodb": "^7.1.0",
+    "msnodesqlv8": "^5.1.5",
+    "mssql": "^11.0.1",
     "mysql2": "^3.19.1",
     "pg": "^8.20.0",
     "tailwind-merge": "^3.5.0",
-    "tedious": "^19.2.1",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
@@ -44,6 +57,7 @@
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@tailwindcss/vite": "^4.2.1",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/mssql": "^9.1.5",
     "@types/node": "^22.19.1",
     "@types/pg": "^8.18.0",
     "@types/react": "^19.2.7",

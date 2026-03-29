@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: app
+productName: Database Connector
 directories:
   buildResources: build
 files:
@@ -12,7 +12,8 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: app
+  executableName: DatabaseConnector
+  publisherName: Santhosha Channappa
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
