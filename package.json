@@ -1,6 +1,6 @@
 {
   "name": "db-connector",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "A simple database connector for PostgreSQL, MySQL, MSSQL, MongoDB, and SQLite built for simple querying.",
   "main": "./out/main/index.js",
   "author": "https://github.com/SanthoshaChannappa",

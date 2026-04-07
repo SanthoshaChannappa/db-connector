@@ -175,19 +175,31 @@ export async function updateRow(
   oldRow: any,
   newRow: any
 ) {
-  console.log(`[DB] Updating row in ${tableName}. PKs: ${pkKeys.join(', ')}`)
-  console.log(`[DB] New row data:`, newRow)
+  console.log('--------------------------------------------------')
+  console.log(`[DB] UPDATE START: ${tableName}`)
+  console.log(`[DB] PKs to match: ${pkKeys.join(', ')}`)
+  console.log(`[DB] Data from UI:`, newRow)
+  
+  // Exclude PKs from the update payload to prevent updates on PK columns
+  const filteredNewRow = { ...newRow }
+  pkKeys.forEach((pk) => {
+    delete filteredNewRow[pk]
+  })
+
+  console.log(`[DB] Filtered update data (SENT TO DB):`, filteredNewRow)
+  console.log('--------------------------------------------------')
+
   switch (conn.driver) {
     case 'pg':
-      return updatePgRow(conn, tableName, pkKeys, oldRow, newRow)
+      return updatePgRow(conn, tableName, pkKeys, oldRow, filteredNewRow)
     case 'mysql':
-      return updateMysqlRow(conn, tableName, pkKeys, oldRow, newRow)
+      return updateMysqlRow(conn, tableName, pkKeys, oldRow, filteredNewRow)
     case 'mssql':
-      return updateMssqlRow(conn, tableName, pkKeys, oldRow, newRow)
+      return updateMssqlRow(conn, tableName, pkKeys, oldRow, filteredNewRow)
     case 'mongodb':
-      return updateMongoRow(conn, tableName, pkKeys, oldRow, newRow)
+      return updateMongoRow(conn, tableName, pkKeys, oldRow, filteredNewRow)
     case 'sqlite':
-      return updateSqliteRow(conn, tableName, pkKeys, oldRow, newRow)
+      return updateSqliteRow(conn, tableName, pkKeys, oldRow, filteredNewRow)
     default:
       throw new Error(`Update not supported for ${conn.driver}`)
   }

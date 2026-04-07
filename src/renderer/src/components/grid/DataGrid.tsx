@@ -168,6 +168,16 @@ export function DataGrid({ gridId }: DataGridProps) {
     return String(value)
   }
 
+  const processRowData = (rowData: any) => {
+    const processed = { ...rowData }
+    Object.keys(processed).forEach((key) => {
+      if (processed[key] === '') {
+        processed[key] = null
+      }
+    })
+    return processed
+  }
+
   const { query, countQuery } = generateQuery(
     conn,
     activeTableName,
@@ -311,6 +321,7 @@ export function DataGrid({ gridId }: DataGridProps) {
   }
 
   const handleCancelEdit = () => {
+    setEditingRowIndex(null)
     setEditingData(null)
     setValidationError(null)
   }
@@ -336,7 +347,9 @@ export function DataGrid({ gridId }: DataGridProps) {
 
   const handleSaveUpdate = async () => {
     if (editingRowIndex === null || !editingData || !conn) return
-    if (!validateRow(editingData)) return
+    
+    const processedData = processRowData(editingData)
+    if (!validateRow(processedData)) return
 
     const oldRow = data?.rows[editingRowIndex]
     if (!oldRow) return
@@ -347,7 +360,7 @@ export function DataGrid({ gridId }: DataGridProps) {
         tableName: activeTableName,
         pkKeys: meta?.primaryKeys || [],
         oldRow,
-        newRow: editingData
+        newRow: processedData
       })
       handleCancelEdit()
     } catch (err) {
@@ -380,13 +393,15 @@ export function DataGrid({ gridId }: DataGridProps) {
 
   const handleInsertRow = async () => {
     if (!conn) return
-    if (!validateRow(newData)) return
+    
+    const processedData = processRowData(newData)
+    if (!validateRow(processedData)) return
 
     try {
       await insertMutation.mutateAsync({
         conn,
         tableName: activeTableName,
-        row: newData
+        row: processedData
       })
       setIsInserting(false)
       setNewData({})
