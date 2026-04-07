@@ -119,7 +119,7 @@ export async function fetchMysqlTableDetails(conn: DBConnection, tableName: stri
     // 4. Get Column Types
     const [columnRows] = await connection.execute(
       `
-      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE
+      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, EXTRA
       FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
     `,
@@ -140,7 +140,8 @@ export async function fetchMysqlTableDetails(conn: DBConnection, tableName: stri
       columns: (columnRows as any[]).map((r) => ({
         name: r.COLUMN_NAME,
         type: r.DATA_TYPE,
-        nullable: r.IS_NULLABLE === 'YES'
+        nullable: r.IS_NULLABLE === 'YES',
+        isAutoIncrement: r.EXTRA === 'auto_increment'
       }))
     }
   } finally {

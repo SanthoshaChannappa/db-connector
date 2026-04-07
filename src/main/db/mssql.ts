@@ -145,9 +145,14 @@ export async function fetchMssqlTableDetails(conn: DBConnection, tableName: stri
 
     // 4. Columns
     const colResult = await request.query(`
-      SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE 
-      FROM INFORMATION_SCHEMA.COLUMNS 
-      WHERE TABLE_NAME = @tableName
+      SELECT 
+        c.name AS COLUMN_NAME, 
+        TYPE_NAME(c.system_type_id) AS DATA_TYPE, 
+        c.is_nullable AS IS_NULLABLE, 
+        c.is_identity AS IS_AUTO_INCREMENT
+      FROM sys.columns c
+      JOIN sys.objects o ON c.object_id = o.object_id
+      WHERE o.name = @tableName AND o.type = 'U'
     `)
 
     return {
@@ -164,7 +169,8 @@ export async function fetchMssqlTableDetails(conn: DBConnection, tableName: stri
       columns: colResult.recordset.map((r) => ({
         name: r.COLUMN_NAME,
         type: r.DATA_TYPE,
-        nullable: r.IS_NULLABLE === 'YES'
+        nullable: r.IS_NULLABLE,
+        isAutoIncrement: r.IS_AUTO_INCREMENT
       }))
     }
   } finally {

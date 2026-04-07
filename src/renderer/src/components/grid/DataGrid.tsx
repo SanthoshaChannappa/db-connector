@@ -64,6 +64,8 @@ export function DataGrid({ gridId }: DataGridProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [cascadeDelete, setCascadeDelete] = useState(false)
+  const [hoveredCell, setHoveredCell] = useState<{ content: string; rect: DOMRect } | null>(null)
+  const [showCopiedToast, setShowCopiedToast] = useState(false)
 
   // Initialize draft filters from store
   useEffect(() => {
@@ -129,6 +131,41 @@ export function DataGrid({ gridId }: DataGridProps) {
       'json',
       'xml'
     ].some((t) => type.includes(t))
+  }
+
+  const isDateType = (columnName: string) => {
+    const colMetaData = meta?.columns?.find((c) => c.name === columnName)
+    if (!colMetaData) return false
+    const type = colMetaData.type.toLowerCase()
+    return ['date', 'time', 'timestamp', 'datetime'].some((t) => type.includes(t))
+  }
+
+  const formatCellValue = (columnName: string, value: any) => {
+    if (value === null || value === undefined) return 'NULL'
+    if (isDateType(columnName)) {
+      try {
+        const d = new Date(value)
+        return isNaN(d.getTime()) ? String(value) : d.toISOString()
+      } catch {
+        return String(value)
+      }
+    }
+    return String(value)
+  }
+
+  const formatForInput = (columnName: string, value: any) => {
+    if (!value) return ''
+    if (isDateType(columnName)) {
+      try {
+        const d = new Date(value)
+        if (isNaN(d.getTime())) return String(value)
+        // datetime-local expects YYYY-MM-DDTHH:mm
+        return d.toISOString().slice(0, 16)
+      } catch {
+        return String(value)
+      }
+    }
+    return String(value)
   }
 
   const { query, countQuery } = generateQuery(
@@ -218,8 +255,12 @@ export function DataGrid({ gridId }: DataGridProps) {
       const val = rowData[col.name]
       const isPK = meta.primaryKeys.includes(col.name)
 
-      // 1. Check required fields (Primary Keys or Non-Nullable)
-      if ((isPK || !col.nullable) && (val === undefined || val === null || val === '')) {
+      // 1. Check required fields (Primary Keys or Non-Nullable, but skip for Auto Increment)
+      if (
+        (isPK || !col.nullable) &&
+        !col.isAutoIncrement &&
+        (val === undefined || val === null || val === '')
+      ) {
         setValidationError(`Field '${col.name}' is required.`)
         return false
       }
@@ -270,9 +311,27 @@ export function DataGrid({ gridId }: DataGridProps) {
   }
 
   const handleCancelEdit = () => {
-    setEditingRowIndex(null)
     setEditingData(null)
     setValidationError(null)
+  }
+
+  const handleCellMouseEnter = (e: React.MouseEvent<HTMLTableCellElement>, content: string) => {
+    const target = e.currentTarget
+    if (target.scrollWidth > target.clientWidth) {
+      setHoveredCell({ content, rect: target.getBoundingClientRect() })
+    }
+  }
+
+  const handleCellMouseLeave = () => {
+    setHoveredCell(null)
+  }
+
+  const handleCellContextMenu = (e: React.MouseEvent, columnName: string, value: any) => {
+    e.preventDefault()
+    const textToCopy = formatCellValue(columnName, value)
+    navigator.clipboard.writeText(textToCopy)
+    setShowCopiedToast(true)
+    setTimeout(() => setShowCopiedToast(false), 2000)
   }
 
   const handleSaveUpdate = async () => {
@@ -585,17 +644,32 @@ export function DataGrid({ gridId }: DataGridProps) {
                             </button>
                           </div>
                         </td>
-                        {data.fields.map((f) => (
-                          <td key={f.name} className="px-2 py-1">
-                            <input
-                              type={getInputType(f.name)}
-                              className="w-full h-8 px-2 bg-background border border-border rounded focus:ring-1 focus:ring-primary text-xs"
-                              placeholder={`New ${f.name}...`}
-                              value={newData[f.name] || ''}
-                              onChange={(e) => setNewData({ ...newData, [f.name]: e.target.value })}
-                            />
-                          </td>
-                        ))}
+                        {data.fields.map((f) => {
+                          const colMetaData = meta?.columns?.find((c) => c.name === f.name)
+                          const isAuto = colMetaData?.isAutoIncrement
+
+                          return (
+                            <td key={f.name} className="px-2 py-1">
+                              {isAuto ? (
+                                <div className="w-full h-8 px-3 flex items-center bg-muted/30 border border-dashed border-border rounded text-[10px] text-muted-foreground font-medium italic">
+                                  (Auto)
+                                </div>
+                              ) : (
+                                <input
+                                  type={getInputType(f.name)}
+                                  className="w-full h-8 px-2 bg-background border border-border rounded focus:ring-1 focus:ring-primary text-xs"
+                                  placeholder={`New ${f.name}...`}
+                                  value={
+                                    getInputType(f.name) === 'datetime-local'
+                                      ? formatForInput(f.name, newData[f.name])
+                                      : newData[f.name] || ''
+                                  }
+                                  onChange={(e) => setNewData({ ...newData, [f.name]: e.target.value })}
+                                />
+                              )}
+                            </td>
+                          )
+                        })}
                         {(meta?.dependentTables?.length ?? 0) > 0 && (
                           <td className="sticky right-0 bg-secondary/80 z-10" />
                         )}
@@ -659,24 +733,32 @@ export function DataGrid({ gridId }: DataGridProps) {
                             const fk = meta?.foreignKeys.find((k) => k.column === f.name)
                             const isBeingEdited = editingRowIndex === i
                             const isPK = meta?.primaryKeys.includes(f.name)
+                            const colMetaData = meta?.columns?.find((c) => c.name === f.name)
 
                             return (
                               <td
                                 key={f.name}
-                                className="px-4 py-2.5 max-w-[250px] truncate text-foreground/80"
+                                className="px-4 py-2.5 max-w-[250px] truncate text-foreground/80 cursor-default"
+                                onMouseEnter={(e) => handleCellMouseEnter(e, String(row[f.name] ?? ''))}
+                                onMouseLeave={handleCellMouseLeave}
+                                onContextMenu={(e) => handleCellContextMenu(e, f.name, row[f.name])}
                               >
-                                {isBeingEdited && !isPK ? (
+                                 {isBeingEdited && !isPK && !colMetaData?.isAutoIncrement ? (
                                   <input
                                     type={getInputType(f.name)}
                                     className="w-full h-8 px-2 bg-background border border-primary/30 rounded focus:ring-1 focus:ring-primary text-xs"
-                                    value={editingData[f.name] ?? ''}
+                                    value={
+                                      getInputType(f.name) === 'datetime-local'
+                                        ? formatForInput(f.name, editingData[f.name])
+                                        : editingData[f.name] ?? ''
+                                    }
                                     onChange={(e) =>
                                       setEditingData({ ...editingData, [f.name]: e.target.value })
                                     }
                                   />
                                 ) : (
                                   <div
-                                    className={`flex items-center gap-2 ${isBeingEdited && isPK ? 'opacity-50 select-none' : ''}`}
+                                    className={`flex items-center gap-2 ${isBeingEdited && (isPK || colMetaData?.isAutoIncrement) ? 'opacity-50 select-none' : ''}`}
                                   >
                                     {fk && row[f.name] ? (
                                       <button
@@ -690,15 +772,20 @@ export function DataGrid({ gridId }: DataGridProps) {
                                         className="text-blue-500 hover:text-blue-400 hover:underline inline-flex items-center gap-1"
                                         title={`Navigate to ${fk.referencedTable}.${fk.referencedColumn}`}
                                       >
-                                        {String(row[f.name])}
+                                        {formatCellValue(f.name, row[f.name])}
                                         <LinkIcon className="w-3 h-3" />
                                       </button>
                                     ) : (
-                                      String(row[f.name] ?? 'NULL')
+                                      formatCellValue(f.name, row[f.name])
                                     )}
                                     {isBeingEdited && isPK && (
                                       <span className="text-[10px] bg-muted px-1 rounded border border-border">
                                         PK
+                                      </span>
+                                    )}
+                                    {isBeingEdited && colMetaData?.isAutoIncrement && !isPK && (
+                                      <span className="text-[10px] bg-muted px-1 rounded border border-border">
+                                        Auto
                                       </span>
                                     )}
                                   </div>
@@ -775,6 +862,27 @@ export function DataGrid({ gridId }: DataGridProps) {
             </div>
           </div>
         </>
+      )}
+
+      {hoveredCell && (
+        <div
+          className="fixed z-[200] bg-popover text-popover-foreground px-3 py-2 rounded-lg border border-border shadow-xl text-xs pointer-events-none whitespace-pre-wrap max-w-md animate-in fade-in zoom-in duration-200"
+          style={{
+            left: Math.min(hoveredCell.rect.left, window.innerWidth - 300),
+            top: hoveredCell.rect.top - 8,
+            transform: 'translateY(-100%)'
+          }}
+        >
+          <div className="font-medium mb-1 text-[10px] text-muted-foreground uppercase tracking-tight">Full Value</div>
+          {hoveredCell.content}
+        </div>
+      )}
+
+      {showCopiedToast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[300] bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-2xl text-xs font-medium animate-in fade-in slide-in-from-bottom-4 duration-300 flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground animate-pulse" />
+          Value copied to clipboard
+        </div>
       )}
     </div>
   )

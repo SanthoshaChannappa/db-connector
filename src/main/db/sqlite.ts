@@ -76,7 +76,8 @@ export async function fetchSqliteTableDetails(conn: DBConnection, tableName: str
       columns: info.map((c) => ({
         name: c.name,
         type: c.type,
-        nullable: c.notnull === 0
+        nullable: c.notnull === 0,
+        isAutoIncrement: primaryKeys.length === 1 && c.pk === 1 && c.type.toUpperCase() === 'INTEGER'
       }))
     }
   } finally {

@@ -128,7 +128,7 @@ export async function fetchPgTableDetails(conn: DBConnection, tableName: string)
 
     const columnRes = await client.query(
       `
-      SELECT column_name, data_type, is_nullable 
+      SELECT column_name, data_type, is_nullable, column_default, is_identity
       FROM information_schema.columns 
       WHERE table_name = $1 
       AND table_schema = 'public'
@@ -147,7 +147,9 @@ export async function fetchPgTableDetails(conn: DBConnection, tableName: string)
       columns: columnRes.rows.map((r) => ({
         name: r.column_name,
         type: r.data_type,
-        nullable: r.is_nullable === 'YES'
+        nullable: r.is_nullable === 'YES',
+        isAutoIncrement:
+          r.is_identity === 'YES' || (r.column_default && r.column_default.includes('nextval'))
       }))
     }
   } finally {

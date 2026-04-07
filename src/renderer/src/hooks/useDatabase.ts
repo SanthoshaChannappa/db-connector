@@ -59,7 +59,7 @@ export function useTableDetails(conn: DBConnection | null, tableName: string | n
     primaryKeys: string[]
     foreignKeys: any[]
     dependentTables: any[]
-    columns: { name: string; type: string; nullable: boolean }[]
+    columns: { name: string; type: string; nullable: boolean; isAutoIncrement: boolean }[]
   }>({
     queryKey: ['table-details', conn?.id, tableName],
     queryFn: () => window.electron.ipcRenderer.invoke('fetch-table-details', conn, tableName),
